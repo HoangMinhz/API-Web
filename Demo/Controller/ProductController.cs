@@ -26,6 +26,7 @@ namespace Demo.Controllers
         /// Gets all products, optionally filtered by category or search query.
         /// </summary>
         [HttpGet]
+        [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
         public async Task<IActionResult> GetProducts([FromQuery] int? categoryId, [FromQuery] string? search, [FromQuery] bool? newProducts)
         {
             try
@@ -82,6 +83,7 @@ namespace Demo.Controllers
         /// Gets a product by ID.
         /// </summary>
         [HttpGet("{id}")]
+        [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
         public async Task<IActionResult> GetProduct(int id)
         {
             try

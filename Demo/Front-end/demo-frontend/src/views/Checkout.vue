@@ -96,8 +96,12 @@
                     type="text"
                     required
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    :class="{ 'border-red-500': validationErrors.fullName }"
                     placeholder="Enter your full name"
                   />
+                  <p v-if="validationErrors.fullName" class="mt-1 text-sm text-red-600">
+                    {{ validationErrors.fullName }}
+                  </p>
                 </div>
 
                 <div>
@@ -107,8 +111,12 @@
                     type="email"
                     required
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    :class="{ 'border-red-500': validationErrors.email }"
                     placeholder="Enter your email"
                   />
+                  <p v-if="validationErrors.email" class="mt-1 text-sm text-red-600">
+                    {{ validationErrors.email }}
+                  </p>
                 </div>
 
                 <div>
@@ -118,53 +126,67 @@
                     type="tel"
                     required
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    :class="{ 'border-red-500': validationErrors.phone }"
                     placeholder="Enter your phone number"
                   />
+                  <p v-if="validationErrors.phone" class="mt-1 text-sm text-red-600">
+                    {{ validationErrors.phone }}
+                  </p>
                 </div>
 
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">City</label>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Address</label>
                   <input
-                    v-model="shippingInfo.city"
+                    v-model="shippingInfo.address"
                     type="text"
                     required
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    placeholder="Enter your city"
+                    :class="{ 'border-red-500': validationErrors.address }"
+                    placeholder="Enter your address"
                   />
+                  <p v-if="validationErrors.address" class="mt-1 text-sm text-red-600">
+                    {{ validationErrors.address }}
+                  </p>
                 </div>
-              </div>
 
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                <textarea
-                  v-model="shippingInfo.address"
-                  required
-                  rows="3"
-                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                  placeholder="Enter your full address"
-                ></textarea>
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">State/Province</label>
-                  <input
-                    v-model="shippingInfo.state"
-                    type="text"
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Province/City</label>
+                  <select
+                    v-model="shippingInfo.province"
                     required
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    placeholder="Enter your state/province"
-                  />
+                    :class="{ 'border-red-500': validationErrors.province }"
+                  >
+                    <option value="">Select province/city</option>
+                    <option v-for="province in provinces" :key="province.code" :value="province.code">
+                      {{ province.name }}
+                    </option>
+                  </select>
+                  <p v-if="validationErrors.province" class="mt-1 text-sm text-red-600">
+                    {{ validationErrors.province }}
+                  </p>
                 </div>
+
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">Postal Code</label>
-                  <input
-                    v-model="shippingInfo.postalCode"
-                    type="text"
-                    required
+                  <label class="block text-sm font-medium text-gray-700 mb-2">District</label>
+                  <select
+                    v-model="shippingInfo.district"
+                    :required="districts.length > 0"
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    placeholder="Enter your postal code"
-                  />
+                    :class="{ 'border-red-500': validationErrors.district }"
+                    :disabled="!shippingInfo.province || districts.length === 0"
+                  >
+                    <option value="">Select district</option>
+                    <option v-for="district in districts" :key="district.code" :value="district.code">
+                      {{ district.name }}
+                    </option>
+                  </select>
+                  <p v-if="validationErrors.district" class="mt-1 text-sm text-red-600">
+                    {{ validationErrors.district }}
+                  </p>
+                  <p v-if="districts.length === 0" class="mt-1 text-sm text-gray-500">
+                    No districts available for this province
+                  </p>
                 </div>
               </div>
 
@@ -200,7 +222,7 @@
 
               <button
                 type="submit"
-                :disabled="isSubmitting"
+                :disabled="isSubmitting || !isShippingValid"
                 class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 {{ isSubmitting ? 'Processing...' : 'Place Order' }}
@@ -216,6 +238,8 @@
 <script>
 import { mapState, mapActions } from 'vuex';
 import formatPrice from '../utils/formatPrice';
+import api from '../services/api';
+import { provinces, districts } from '../data/vietnam-locations';
 
 export default {
   name: 'CheckoutPage',
@@ -226,16 +250,37 @@ export default {
         email: '',
         phone: '',
         address: '',
-        city: '',
-        state: '',
-        postalCode: '',
+        province: '',
+        district: '',
         paymentMethod: 'cod'
       },
-      isSubmitting: false
+      isSubmitting: false,
+      userInfo: null,
+      provinces,
+      districts: [],
+      validationErrors: {},
+      currentStep: 1
     };
+  },
+  watch: {
+    'shippingInfo.province': {
+      handler(newProvince) {
+        if (newProvince) {
+          this.districts = districts[newProvince] || [];
+          if (this.districts.length === 0) {
+            this.shippingInfo.district = '';
+          }
+        } else {
+          this.districts = [];
+          this.shippingInfo.district = '';
+        }
+      },
+      immediate: true
+    }
   },
   computed: {
     ...mapState('cart', ['items', 'loading', 'error']),
+    ...mapState('auth', ['user']),
     cartItems() {
       return this.items;
     },
@@ -246,59 +291,163 @@ export default {
       return this.error;
     },
     subtotal() {
-      return this.cartItems.reduce((total, item) => {
-        return total + (item.product?.price || 0) * item.quantity;
-      }, 0);
+      return this.$store.getters['cart/subtotal'];
     },
     tax() {
-      return this.subtotal * 0.1; // 10% tax
+      return this.$store.getters['cart/tax'];
     },
     total() {
-      return this.subtotal + this.tax;
+      return this.$store.getters['cart/total'];
+    },
+    isShippingValid() {
+      return (
+        this.shippingInfo.fullName &&
+        this.shippingInfo.email &&
+        this.shippingInfo.phone &&
+        this.shippingInfo.address &&
+        this.shippingInfo.province &&
+        (this.districts.length === 0 || this.shippingInfo.district)
+      );
     }
   },
+  async created() {
+    await this.fetchUserInfo();
+  },
   methods: {
-    ...mapActions('cart', ['checkout']),
+    ...mapActions('cart', ['clearCart']),
+    ...mapActions('notification', ['showNotification']),
     formatPrice,
+    validatePhoneNumber(phone) {
+      const phoneRegex = /^[0-9]{10,11}$/;
+      return phoneRegex.test(phone);
+    },
+    validateEmail(email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email);
+    },
+    validateShippingInfo() {
+      this.validationErrors = {};
+
+      if (!this.shippingInfo.fullName?.trim()) {
+        this.validationErrors.fullName = 'Full name is required';
+      }
+
+      if (!this.shippingInfo.email?.trim()) {
+        this.validationErrors.email = 'Email is required';
+      } else if (!this.validateEmail(this.shippingInfo.email)) {
+        this.validationErrors.email = 'Invalid email format';
+      }
+
+      if (!this.shippingInfo.phone?.trim()) {
+        this.validationErrors.phone = 'Phone number is required';
+      } else if (!this.validatePhoneNumber(this.shippingInfo.phone)) {
+        this.validationErrors.phone = 'Phone number must be 10-11 digits';
+      }
+
+      if (!this.shippingInfo.address?.trim()) {
+        this.validationErrors.address = 'Address is required';
+      }
+
+      if (!this.shippingInfo.province) {
+        this.validationErrors.province = 'Province is required';
+      }
+
+      if (this.districts.length > 0 && !this.shippingInfo.district) {
+        this.validationErrors.district = 'District is required';
+      }
+
+      return Object.keys(this.validationErrors).length === 0;
+    },
+    async fetchUserInfo() {
+      try {
+        const response = await api.get('/User/current');
+        this.userInfo = response.data;
+        // Auto-fill shipping information
+        this.shippingInfo = {
+          ...this.shippingInfo,
+          fullName: this.userInfo.fullName || '',
+          email: this.userInfo.email || '',
+          phone: this.userInfo.phoneNumber || '',
+          address: this.userInfo.address || '',
+          province: this.userInfo.province || '',
+          district: this.userInfo.district || ''
+        };
+      } catch (error) {
+        console.error('Failed to fetch user info:', error);
+        this.showNotification({
+          type: 'error',
+          message: 'Failed to load user information'
+        });
+      }
+    },
     async submitOrder() {
       if (this.isSubmitting) return;
-      
+
+      // Validate shipping information
+      if (!this.validateShippingInfo()) {
+        this.showNotification({
+          type: 'error',
+          message: 'Please fill in all required fields correctly'
+        });
+        return;
+      }
+
       this.isSubmitting = true;
       try {
+        const selectedProvince = this.provinces.find(p => p.code === this.shippingInfo.province);
+        const selectedDistrict = this.districts.find(d => d.code === this.shippingInfo.district);
+        
+        // Build address string based on available data
+        let addressParts = [this.shippingInfo.address];
+        if (selectedDistrict?.name) {
+          addressParts.push(selectedDistrict.name);
+        }
+        if (selectedProvince?.name) {
+          addressParts.push(selectedProvince.name);
+        }
+        
         const orderData = {
-          ...this.shippingInfo,
+          shippingAddress: addressParts.join(', '),
+          phoneNumber: this.shippingInfo.phone,
+          fullName: this.shippingInfo.fullName,
+          notes: `Payment Method: ${this.shippingInfo.paymentMethod}`,
           items: this.cartItems.map(item => ({
             productId: item.productId,
-            quantity: item.quantity,
-            price: item.product.price
-          })),
-          subtotal: this.subtotal,
-          tax: this.tax,
-          total: this.total
+            quantity: item.quantity
+          }))
         };
 
-        await this.checkout(orderData);
+        const response = await api.post('/Order', orderData);
         
-        // Show success message and redirect
-        this.$store.dispatch('notification/showNotification', {
+        // Show success notification
+        this.showNotification({
           type: 'success',
           message: 'Order placed successfully!'
-        }, { root: true });
+        });
+
+        // Clear cart and redirect
+        await this.clearCart();
         
-        this.$router.push('/order-confirmation');
+        // Redirect to order confirmation page
+        this.$router.push({ 
+          name: 'order-confirmation', 
+          params: { id: response.data.id },
+          query: { 
+            orderNumber: response.data.orderNumber,
+            total: response.data.totalAmount || this.total
+          }
+        });
       } catch (error) {
-        console.error('Checkout error:', error);
-        this.$store.dispatch('notification/showNotification', {
+        console.error('Failed to submit order:', error);
+        const errorMessage = error.response?.data?.message || 'Failed to place order. Please try again.';
+        this.showNotification({
           type: 'error',
-          message: 'Failed to place order. Please try again.'
-        }, { root: true });
+          message: errorMessage
+        });
       } finally {
         this.isSubmitting = false;
       }
     }
-  },
-  created() {
-    this.$store.dispatch('cart/fetchCart');
   }
 };
 </script> 

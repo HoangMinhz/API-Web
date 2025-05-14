@@ -7,6 +7,9 @@ namespace Demo.Models
         [Required(ErrorMessage = "Username is required")]
         [StringLength(50, MinimumLength = 3, ErrorMessage = "Username must be between 3 and 50 characters")]
         public string Username { get; set; }
+        [Required(ErrorMessage = "Full name is required")]        
+        [StringLength(100)]
+        public string FullName { get; set; }
 
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "Invalid email address")]
@@ -22,10 +25,5 @@ namespace Demo.Models
         [DataType(DataType.Password)]
         public string ConfirmPassword { get; set; }
 
-        [Required(ErrorMessage = "First name is required")]
-        public string FirstName { get; set; }
-
-        [Required(ErrorMessage = "Last name is required")]
-        public string LastName { get; set; }
     }
 }

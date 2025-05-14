@@ -7,6 +7,9 @@ using System.Text;
 using Demo.Models;
 using Demo.Models.ViewModel;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using Demo.Data;
 
 namespace Demo.Controllers
 {
@@ -18,17 +21,20 @@ namespace Demo.Controllers
         private readonly RoleManager<IdentityRole<int>> _roleManager;
         private readonly IConfiguration _configuration;
         private readonly ILogger<UserController> _logger;
+        private readonly AppDbContext _context;
 
         public UserController(
             UserManager<AppUser> userManager,
             RoleManager<IdentityRole<int>> roleManager,
             IConfiguration configuration,
-            ILogger<UserController> logger)
+            ILogger<UserController> logger,
+            AppDbContext context)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _configuration = configuration;
             _logger = logger;
+            _context = context;
         }
 
         /// <summary>
@@ -37,163 +43,130 @@ namespace Demo.Controllers
         /// <param name="model">Thông tin đăng nhập</param>
         /// <returns>JWT token và thông tin người dùng</returns>
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                _logger.LogWarning("Invalid login model: {@ModelState}", ModelState);
-                return BadRequest(new { message = "Invalid input", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
-            }
+        [AllowAnonymous]
+        // public async Task<IActionResult> Login([FromBody] LoginModel model)
+        // {
+        //     _logger.LogInformation("Login attempt received for email: {Email}", model?.Email);
 
-            try
-            {
-                _logger.LogInformation("Login attempt for user {Username}", model.Username);
+        //     if (!ModelState.IsValid)
+        //     {
+        //         _logger.LogWarning("Invalid login model: {@ModelState}", ModelState);
+        //         return BadRequest(new { message = "Invalid input", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+        //     }
 
-                // Tìm người dùng theo username
-                var user = await _userManager.FindByNameAsync(model.Username);
-                if (user == null)
-                {
-                    _logger.LogWarning("User {Username} not found", model.Username);
-                    return Unauthorized(new { message = "Invalid username or password" });
-                }
+        //     try
+        //     {
+        //         _logger.LogInformation("Login attempt for email {Email}", model.Email);
 
-                // Kiểm tra mật khẩu
-                var passwordValid = await _userManager.CheckPasswordAsync(user, model.Password);
-                if (!passwordValid)
-                {
-                    _logger.LogWarning("Invalid password for user {Username}", model.Username);
-                    return Unauthorized(new { message = "Invalid username or password" });
-                }
+        //         // Find user by email
+        //         var user = await _userManager.FindByEmailAsync(model.Email);
+        //         if (user == null)
+        //         {
+        //             _logger.LogWarning("User with email {Email} not found", model.Email);
+        //             return Unauthorized(new { message = "Invalid email or password" });
+        //         }
 
-                // Kiểm tra email đã xác nhận chưa
-                if (!user.EmailConfirmed)
-                {
-                    _logger.LogWarning("User {Username} has not confirmed their email", model.Username);
-                    return Unauthorized(new { message = "Please confirm your email before logging in" });
-                }
+        //         _logger.LogInformation("User found: {UserId}, EmailConfirmed: {EmailConfirmed}", user.Id, user.EmailConfirmed);
 
-                // Tạo JWT token
-                var token = await GenerateJwtToken(user);
-                if (string.IsNullOrEmpty(token))
-                {
-                    _logger.LogError("Failed to generate JWT token for user {Username}", model.Username);
-                    return StatusCode(500, new { message = "Failed to generate token" });
-                }
+        //         // Check password
+        //         var passwordValid = await _userManager.CheckPasswordAsync(user, model.Password);
+        //         _logger.LogInformation("Password validation result: {IsValid}", passwordValid);
+                
+        //         if (!passwordValid)
+        //         {
+        //             _logger.LogWarning("Invalid password for user {Email}", model.Email);
+        //             return Unauthorized(new { message = "Invalid email or password" });
+        //         }
 
-                // Lấy danh sách roles
-                var roles = await _userManager.GetRolesAsync(user);
-                _logger.LogInformation("User {Username} logged in successfully with roles: {Roles}", model.Username, roles);
+        //         // Check if email is confirmed
+        //         if (!user.EmailConfirmed)
+        //         {
+        //             _logger.LogWarning("User {Email} has not confirmed their email", model.Email);
+        //             return Unauthorized(new { message = "Please confirm your email before logging in" });
+        //         }
 
-                return Ok(new
-                {
-                    token,
-                    user = new
-                    {
-                        user.Id,
-                        user.UserName,
-                        user.Email,
-                        roles
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during login for user {Username}", model.Username);
-                return StatusCode(500, new { message = "An error occurred during login", details = ex.Message });
-            }
-        }
+        //         // Generate JWT token
+        //         var token = await GenerateJwtToken(user);
+        //         if (string.IsNullOrEmpty(token))
+        //         {
+        //             _logger.LogError("Failed to generate JWT token for user {Email}", model.Email);
+        //             return StatusCode(500, new { message = "Failed to generate token" });
+        //         }
 
-        /// <summary>
-        /// Đăng ký người dùng mới với vai trò mặc định là "User"
-        /// </summary>
-        /// <param name="model">Thông tin đăng ký</param>
-        /// <returns>Thông tin người dùng đã đăng ký</returns>
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                _logger.LogWarning("Invalid register model: {@ModelState}", ModelState);
-                return BadRequest(new { message = "Invalid input", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
-            }
+        //         // Get roles
+        //         var roles = await _userManager.GetRolesAsync(user);
+        //         _logger.LogInformation("User {Email} logged in successfully with roles: {Roles}", model.Email, roles);
 
-            try
-            {
-                _logger.LogInformation("Register attempt for user {Username}", model.Username);
+        //         return Ok(new
+        //         {
+        //             token,
+        //             user = new
+        //             {
+        //                 user.Id,
+        //                 user.UserName,
+        //                 user.Email,
+        //                 roles
+        //             }
+        //         });
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         _logger.LogError(ex, "Error during login for {Email}: {Message}", model.Email, ex.Message);
+        //         return StatusCode(500, new { message = "An error occurred during login", details = ex.Message });
+        //     }
+        // }
 
-                // Kiểm tra username đã tồn tại chưa
-                var existingUser = await _userManager.FindByNameAsync(model.Username);
-                if (existingUser != null)
-                {
-                    _logger.LogWarning("Username {Username} already exists", model.Username);
-                    return BadRequest(new { message = "Username already exists" });
-                }
+        // /// <summary>
+        // /// Đăng ký người dùng mới với vai trò mặc định là "User"
+        // /// </summary>
+        // /// <param name="model">Thông tin đăng ký</param>
+        // /// <returns>Thông tin người dùng đã đăng ký</returns>
+        // [HttpPost("register")]
+        // [AllowAnonymous]
+        // public async Task<IActionResult> Register([FromBody] RegisterModel model)
+        // {
+        //     try
+        //     {
+        //         if (!ModelState.IsValid)
+        //         {
+        //             return BadRequest(ModelState);
+        //         }
 
-                // Kiểm tra email đã tồn tại chưa
-                existingUser = await _userManager.FindByEmailAsync(model.Email);
-                if (existingUser != null)
-                {
-                    _logger.LogWarning("Email {Email} already exists", model.Email);
-                    return BadRequest(new { message = "Email already exists" });
-                }
+        //         var existingUser = await _userManager.FindByNameAsync(model.Username);
+        //         if (existingUser != null)
+        //         {
+        //             return BadRequest(new { message = "Username already exists" });
+        //         }
 
-                // Tạo user mới
-                var user = new AppUser
-                {
-                    UserName = model.Username,
-                    Email = model.Email,
-                    EmailConfirmed = false // Yêu cầu xác nhận email (có thể bỏ qua nếu không cần)
-                };
+        //         existingUser = await _userManager.FindByEmailAsync(model.Email);
+        //         if (existingUser != null)
+        //         {
+        //             return BadRequest(new { message = "Email already exists" });
+        //         }
 
-                var result = await _userManager.CreateAsync(user, model.Password);
-                if (!result.Succeeded)
-                {
-                    var errors = result.Errors.Select(e => e.Description).ToList();
-                    _logger.LogWarning("Failed to create user {Username}: {Errors}", model.Username, errors);
-                    return BadRequest(new { message = "Failed to register user", errors });
-                }
+        //         var user = new AppUser
+        //         {
+        //             UserName = model.Username,
+        //             Email = model.Email,
+        //             FullName = model.FullName.Trim()
+        //         };
 
-                // Đảm bảo role "User" tồn tại
-                if (!await _roleManager.RoleExistsAsync("User"))
-                {
-                    var roleResult = await _roleManager.CreateAsync(new IdentityRole<int>("User"));
-                    if (!roleResult.Succeeded)
-                    {
-                        var roleErrors = roleResult.Errors.Select(e => e.Description).ToList();
-                        _logger.LogError("Failed to create User role: {Errors}", roleErrors);
-                        return StatusCode(500, new { message = "Failed to create User role", errors = roleErrors });
-                    }
-                }
+        //         var result = await _userManager.CreateAsync(user, model.Password);
+        //         if (!result.Succeeded)
+        //         {
+        //             return BadRequest(new { message = "Failed to create user", errors = result.Errors });
+        //         }
 
-                // Gán role "User" cho user mới
-                var addToRoleResult = await _userManager.AddToRoleAsync(user, "User");
-                if (!addToRoleResult.Succeeded)
-                {
-                    var roleErrors = addToRoleResult.Errors.Select(e => e.Description).ToList();
-                    _logger.LogWarning("Failed to assign User role to {Username}: {Errors}", model.Username, roleErrors);
-                    return BadRequest(new { message = "Failed to assign role to user", errors = roleErrors });
-                }
+        //         await _userManager.AddToRoleAsync(user, "User");
 
-                _logger.LogInformation("User {Username} registered successfully with role User", model.Username);
-
-                return Ok(new
-                {
-                    message = "User registered successfully",
-                    user = new
-                    {
-                        user.Id,
-                        user.UserName,
-                        user.Email,
-                        roles = new[] { "User" }
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during registration for user {Username}", model.Username);
-                return StatusCode(500, new { message = "An error occurred during registration", details = ex.Message });
-            }
-        }
+        //         return Ok(new { message = "User registered successfully" });
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         _logger.LogError(ex, "Error during registration");
+        //         return StatusCode(500, new { message = "An error occurred during registration" });
+        //     }
+        // }
 
         /// <summary>
         /// Tạo JWT token cho người dùng
@@ -238,5 +211,126 @@ namespace Demo.Controllers
                 throw;
             }
         }
+
+        [HttpGet("current")]
+        [Authorize]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                var user = await _userManager.FindByIdAsync(userId.ToString());
+
+                if (user == null)
+                {
+                    return NotFound("User not found");
+                }
+
+                return Ok(new
+                {
+                    username = user.UserName,
+                    email = user.Email,
+                    fullName = user.FullName ?? string.Empty,
+                    phoneNumber = user.PhoneNumber,
+                    address = user.Address,
+                    province = user.Province,
+                    district = user.District
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting current user");
+                return StatusCode(500, new { message = "An error occurred while getting user information" });
+            }
+        }
+
+        [HttpPut("update-profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileModel model)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                var user = await _userManager.FindByIdAsync(userId.ToString());
+
+                if (user == null)
+                {
+                    return NotFound("User not found");
+                }
+
+                user.FullName = model.FullName;
+                user.PhoneNumber = model.PhoneNumber;
+                user.Address = model.Address;
+                user.Province = model.Province;
+                user.District = model.District;
+
+                var result = await _userManager.UpdateAsync(user);
+
+                if (result.Succeeded)
+                {
+                    return Ok(new { message = "Profile updated successfully" });
+                }
+
+                return BadRequest(new { message = "Failed to update profile", errors = result.Errors });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating profile");
+                return StatusCode(500, new { message = "An error occurred while updating profile" });
+            }
+        }
+
+        [HttpPut("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordModel model)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                if (userId == 0)
+                    return Unauthorized();
+
+                var user = await _userManager.FindByIdAsync(userId.ToString());
+                if (user == null)
+                    return NotFound();
+
+                var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+                if (!result.Succeeded)
+                {
+                    var errors = result.Errors.Select(e => e.Description).ToList();
+                    _logger.LogWarning("Failed to change password: {Errors}", errors);
+                    return BadRequest(new { message = "Failed to change password", errors });
+                }
+
+                return Ok(new { message = "Password changed successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password");
+                return StatusCode(500, "An error occurred while changing password");
+            }
+        }
+    }
+
+    public class UpdateProfileModel
+    {
+        public string FullName { get; set; }
+        public string PhoneNumber { get; set; }
+        public string Address { get; set; }
+        public string Province { get; set; }
+        public string District { get; set; }
+    }
+
+    public class ChangePasswordModel
+    {
+        [Required]
+        public string CurrentPassword { get; set; }
+
+        [Required]
+        [MinLength(6)]
+        public string NewPassword { get; set; }
     }
 }

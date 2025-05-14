@@ -68,12 +68,12 @@
             </div>
             <div class="flex justify-between">
               <span>Tax (10%)</span>
-              <span>{{ formatPrice($store.getters['cart/subtotal'] * 0.1) }}</span>
+              <span>{{ formatPrice($store.getters['cart/tax']) }}</span>
             </div>
             <div class="border-t pt-2 mt-2">
               <div class="flex justify-between font-semibold">
                 <span>Total</span>
-                <span>{{ formatPrice($store.getters['cart/subtotal'] * 1.1) }}</span>
+                <span>{{ formatPrice($store.getters['cart/total']) }}</span>
               </div>
             </div>
           </div>

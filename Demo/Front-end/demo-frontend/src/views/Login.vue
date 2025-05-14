@@ -160,27 +160,38 @@ export default {
       password: '',
       showPassword: false,
       rememberMe: false,
-      error: null,
       loading: false,
+      error: null
     };
   },
   methods: {
     ...mapActions('user', ['login']),
     ...mapActions('notification', ['showNotification']),
     async handleLogin() {
-      this.error = null;
       this.loading = true;
       
+      // Basic validation
+      if (!this.email || !this.password) {
+        this.showNotification({
+          type: 'error',
+          message: 'Vui lòng nhập đầy đủ email và mật khẩu'
+        });
+        this.loading = false;
+        return;
+      }
+
       try {
-        console.log('Attempting login with:', { email: this.email });
-        const response = await api.post('/user/login', {
-          email: this.email,
+        // Make the login request
+        const response = await api.post('/Auth/login', {
+          email: this.email.trim(),
           password: this.password
         });
 
-        console.log('Login response:', response.data);
-
-        if (response.data.token) {
+        // Check if we got a valid response with token
+        if (response.data && response.data.token) {
+          // Store the token and user info
+          await this.login(response.data);
+          
           // Store email if remember me is checked
           if (this.rememberMe) {
             localStorage.setItem('rememberedEmail', this.email);
@@ -188,34 +199,82 @@ export default {
             localStorage.removeItem('rememberedEmail');
           }
 
-          // Dispatch login action with the response data
-          const success = await this.login(response.data);
-          
-          if (success) {
-            // Redirect to the intended page or home
-            const redirectPath = this.$route.query.redirect || '/';
-            this.$router.push(redirectPath);
-            this.showNotification({
-              type: 'success',
-              message: 'Login successful!'
-            });
-          } else {
-            this.error = 'Login failed. Please try again.';
-          }
+          // Show success message
+          this.showNotification({
+            type: 'success',
+            message: 'Đăng nhập thành công!'
+          });
+
+          // Redirect to home or intended page
+          const redirectPath = this.$route.query.redirect || '/';
+          this.$router.push(redirectPath);
         } else {
-          console.error('No token in response:', response.data);
-          this.error = 'Invalid response from server';
+          throw new Error('Phản hồi không hợp lệ từ máy chủ');
         }
       } catch (error) {
-        console.error('Login error details:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status
-        });
-        this.error = error.response?.data?.message || 'Login failed. Please try again.';
+        console.error('Login error:', error);
+        
+        // Handle specific error cases
+        let errorMessage = 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.';
+        
+        if (error.response) {
+          const serverError = error.response.data;
+          console.log('Server error response:', serverError); // Debug log
+
+          // Check for specific error messages from server
+          if (serverError?.message) {
+            errorMessage = serverError.message;
+          } else if (serverError?.error) {
+            errorMessage = serverError.error;
+          } else {
+            // Handle based on status code if no specific message
+            switch (error.response.status) {
+              case 401:
+                if (serverError?.includes('email')) {
+                  errorMessage = 'Tài khoản của bạn chưa được xác thực email. Vui lòng kiểm tra hộp thư và xác thực email trước khi đăng nhập.';
+                } else if (serverError?.includes('locked')) {
+                  errorMessage = 'Tài khoản của bạn đã bị khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 5 phút hoặc liên hệ hỗ trợ.';
+                } else {
+                  errorMessage = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại thông tin đăng nhập.';
+                }
+                break;
+              case 400:
+                if (serverError?.includes('password')) {
+                  errorMessage = 'Mật khẩu không đúng định dạng. Vui lòng kiểm tra lại.';
+                } else if (serverError?.includes('email')) {
+                  errorMessage = 'Email không đúng định dạng. Vui lòng kiểm tra lại.';
+                } else {
+                  errorMessage = 'Thông tin đăng nhập không hợp lệ';
+                }
+                break;
+              case 403:
+                errorMessage = 'Tài khoản của bạn không có quyền truy cập. Vui lòng liên hệ quản trị viên.';
+                break;
+              case 404:
+                errorMessage = 'Không tìm thấy tài khoản với email này. Vui lòng kiểm tra lại hoặc đăng ký tài khoản mới.';
+                break;
+              case 0:
+                errorMessage = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet của bạn.';
+                break;
+              case 500:
+                errorMessage = 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.';
+                break;
+              default:
+                errorMessage = 'Đăng nhập thất bại. Vui lòng thử lại sau.';
+            }
+          }
+        } else if (error.message === 'Network Error') {
+          errorMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet của bạn.';
+        } else if (error.message === 'timeout') {
+          errorMessage = 'Kết nối đến máy chủ bị timeout. Vui lòng thử lại sau.';
+        }
+
+        // Log the final error message for debugging
+        console.log('Final error message:', errorMessage);
+
         this.showNotification({
           type: 'error',
-          message: this.error
+          message: errorMessage
         });
       } finally {
         this.loading = false;
@@ -227,10 +286,9 @@ export default {
         window.location.href = '/api/auth/google';
       } catch (error) {
         console.error('Google login error:', error);
-        this.error = 'Failed to initiate Google login';
         this.showNotification({
           type: 'error',
-          message: this.error
+          message: 'Không thể kết nối với Google. Vui lòng thử lại sau.'
         });
       }
     },
@@ -240,10 +298,9 @@ export default {
         window.location.href = '/api/auth/facebook';
       } catch (error) {
         console.error('Facebook login error:', error);
-        this.error = 'Failed to initiate Facebook login';
         this.showNotification({
           type: 'error',
-          message: this.error
+          message: 'Không thể kết nối với Facebook. Vui lòng thử lại sau.'
         });
       }
     }
@@ -254,6 +311,20 @@ export default {
     if (rememberedEmail) {
       this.email = rememberedEmail;
       this.rememberMe = true;
+    }
+
+    // Check for temporary credentials from registration
+    const tempCredentials = localStorage.getItem('tempCredentials');
+    if (tempCredentials) {
+      try {
+        const { email, password } = JSON.parse(tempCredentials);
+        this.email = email;
+        this.password = password;
+        // Remove the temporary credentials after using them
+        localStorage.removeItem('tempCredentials');
+      } catch (error) {
+        console.error('Error parsing temporary credentials:', error);
+      }
     }
   },
 };

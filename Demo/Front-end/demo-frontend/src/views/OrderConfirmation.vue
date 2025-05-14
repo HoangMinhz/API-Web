@@ -1,64 +1,46 @@
 <template>
   <div class="min-h-screen bg-gray-50 py-12">
-    <div class="container mx-auto px-4">
-      <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
+    <div class="container mx-auto px-4 max-w-3xl">
+      <div class="bg-white rounded-xl shadow-sm p-8">
         <div class="text-center mb-8">
           <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
           </div>
-          <h1 class="text-2xl font-bold text-gray-900 mb-2">Order Confirmed!</h1>
-          <p class="text-gray-600">Thank you for your purchase. Your order has been received.</p>
+          <h1 class="text-2xl font-semibold text-gray-900 mb-2">Order Confirmed!</h1>
+          <p class="text-gray-600">Thank you for your purchase</p>
         </div>
 
         <div class="border-t border-gray-200 pt-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">Order Details</h2>
-          
           <div class="space-y-4">
             <div class="flex justify-between">
               <span class="text-gray-600">Order Number</span>
-              <span class="text-gray-900 font-medium">{{ orderNumber }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-600">Date</span>
-              <span class="text-gray-900">{{ orderDate }}</span>
+              <span class="font-medium text-gray-900">{{ orderNumber }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-gray-600">Total Amount</span>
-              <span class="text-gray-900 font-medium">{{ formatPrice(orderTotal) }}</span>
+              <span class="font-medium text-gray-900">{{ formatPrice(total) }}</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-gray-600">Payment Method</span>
-              <span class="text-gray-900">{{ paymentMethod }}</span>
+              <span class="text-gray-600">Order Date</span>
+              <span class="font-medium text-gray-900">{{ formatDate(orderDate) }}</span>
             </div>
           </div>
         </div>
 
-        <div class="border-t border-gray-200 pt-6 mt-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">Shipping Information</h2>
-          
-          <div class="space-y-2">
-            <p class="text-gray-900">{{ shippingInfo.fullName }}</p>
-            <p class="text-gray-600">{{ shippingInfo.address }}</p>
-            <p class="text-gray-600">{{ shippingInfo.city }}, {{ shippingInfo.state }} {{ shippingInfo.postalCode }}</p>
-            <p class="text-gray-600">{{ shippingInfo.email }}</p>
-            <p class="text-gray-600">{{ shippingInfo.phone }}</p>
-          </div>
-        </div>
-
-        <div class="mt-8 flex flex-col sm:flex-row gap-4">
-          <router-link
-            to="/shop"
-            class="flex-1 bg-gray-800 text-white py-3 px-4 rounded-md text-center hover:bg-gray-900 transition"
-          >
-            Continue Shopping
-          </router-link>
+        <div class="mt-8 space-y-4">
           <router-link
             to="/orders"
-            class="flex-1 bg-blue-600 text-white py-3 px-4 rounded-md text-center hover:bg-blue-700 transition"
+            class="block w-full text-center bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
           >
-            View Orders
+            View Order Details
+          </router-link>
+          <router-link
+            to="/shop"
+            class="block w-full text-center bg-gray-100 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition"
+          >
+            Continue Shopping
           </router-link>
         </div>
       </div>
@@ -68,49 +50,43 @@
 
 <script>
 import formatPrice from '../utils/formatPrice';
+import api from '../services/api';
 
 export default {
-  name: 'OrderConfirmationPage',
+  name: 'OrderConfirmation',
   data() {
     return {
-      orderNumber: '#' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0'),
-      orderDate: new Date().toLocaleDateString(),
-      orderTotal: 0,
-      paymentMethod: 'Cash on Delivery',
-      shippingInfo: {
-        fullName: '',
-        email: '',
-        phone: '',
-        address: '',
-        city: '',
-        state: '',
-        postalCode: ''
-      }
+      orderNumber: this.$route.query.orderNumber || '',
+      total: Number(this.$route.query.total) || 0,
+      orderDate: new Date()
     };
   },
-  methods: {
-    formatPrice
-  },
   created() {
-    // In a real application, you would fetch this data from your backend
-    // For now, we'll use the data from the route query
-    const orderData = this.$route.query.orderData;
-    if (orderData) {
+    // Fetch order details if we have an order ID
+    if (this.$route.params.id) {
+      this.fetchOrderDetails();
+    }
+  },
+  methods: {
+    formatPrice,
+    formatDate(date) {
+      return new Date(date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    },
+    async fetchOrderDetails() {
       try {
-        const data = JSON.parse(decodeURIComponent(orderData));
-        this.orderTotal = data.total;
-        this.paymentMethod = data.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Bank Transfer';
-        this.shippingInfo = {
-          fullName: data.fullName,
-          email: data.email,
-          phone: data.phone,
-          address: data.address,
-          city: data.city,
-          state: data.state,
-          postalCode: data.postalCode
-        };
+        const response = await api.get(`/Order/${this.$route.params.id}`);
+        if (response.data) {
+          this.total = response.data.totalAmount;
+          this.orderDate = response.data.orderDate;
+        }
       } catch (error) {
-        console.error('Error parsing order data:', error);
+        console.error('Failed to fetch order details:', error);
       }
     }
   }

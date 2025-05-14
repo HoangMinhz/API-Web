@@ -18,45 +18,45 @@
 
       <!-- Register Form -->
       <form @submit.prevent="handleRegister" class="space-y-6">
-        <!-- Name Fields -->
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label for="firstName" class="block text-sm font-medium text-gray-700">First Name</label>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <input
-                v-model="form.firstName"
-                id="firstName"
-                type="text"
-                class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200"
-                placeholder="First name"
-                required
-                autocomplete="given-name"
-              />
+        <!-- Full Name Field -->
+        <div class="space-y-2">
+          <label for="fullName" class="block text-sm font-medium text-gray-700">Full Name</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
             </div>
+            <input
+              v-model="form.fullName"
+              id="fullName"
+              type="text"
+              class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200"
+              placeholder="Enter your full name"
+              required
+              autocomplete="name"
+            />
           </div>
-          <div class="space-y-2">
-            <label for="lastName" class="block text-sm font-medium text-gray-700">Last Name</label>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <input
-                v-model="form.lastName"
-                id="lastName"
-                type="text"
-                class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200"
-                placeholder="Last name"
-                required
-                autocomplete="family-name"
-              />
+        </div>
+
+        <!-- Username Field -->
+        <div class="space-y-2">
+          <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
             </div>
+            <input
+              v-model="form.username"
+              id="username"
+              type="text"
+              class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200"
+              placeholder="Choose a username"
+              required
+              autocomplete="username"
+            />
           </div>
         </div>
 
@@ -223,8 +223,8 @@ export default {
   data() {
     return {
       form: {
-        firstName: '',
-        lastName: '',
+        fullName: '',
+        username: '',
         email: '',
         password: '',
         confirmPassword: '',
@@ -241,59 +241,66 @@ export default {
     async handleRegister() {
       this.error = null;
       this.loading = true;
-      
+
       try {
         // Validate passwords match
         if (this.form.password !== this.form.confirmPassword) {
-          throw new Error('Passwords do not match');
+          this.error = 'Passwords do not match';
+          return;
         }
 
-        // Validate password strength
-        if (this.form.password.length < 8) {
-          throw new Error('Password must be at least 8 characters long');
+        // Validate password length
+        if (this.form.password.length < 6) {
+          this.error = 'Password must be at least 6 characters long';
+          return;
         }
 
-        console.log('Attempting registration with:', { 
-          firstName: this.form.firstName,
-          lastName: this.form.lastName,
-          email: this.form.email 
-        });
+        // Validate username length
+        if (this.form.username.length < 3) {
+          this.error = 'Username must be at least 3 characters long';
+          return;
+        }
 
-        const response = await api.post('/user/register', {
-          firstName: this.form.firstName,
-          lastName: this.form.lastName,
+        const response = await api.post('/Auth/register', {
+          username: this.form.username,
           email: this.form.email,
-          password: this.form.password
+          password: this.form.password,
+          confirmPassword: this.form.confirmPassword,
+          fullName: this.form.fullName.trim()
         });
 
-        console.log('Registration response:', response.data);
+        if (response.data) {
+          // Store credentials for auto-fill
+          localStorage.setItem('tempCredentials', JSON.stringify({
+            email: this.form.email,
+            password: this.form.password
+          }));
 
-        if (response.data.token) {
-          // Dispatch register action with the response data
-          const success = await this.register(response.data);
+          this.showNotification({
+            type: 'success',
+            message: 'Registration successful! Please check your email to verify your account.'
+          });
           
-          if (success) {
-            // Redirect to the intended page or home
-            const redirectPath = this.$route.query.redirect || '/';
-            this.$router.push(redirectPath);
-            this.showNotification({
-              type: 'success',
-              message: 'Registration successful!'
-            });
-          } else {
-            this.error = 'Registration failed. Please try again.';
-          }
-        } else {
-          console.error('No token in response:', response.data);
-          this.error = 'Invalid response from server';
+          // Redirect to login page after a short delay
+          setTimeout(() => {
+            this.$router.push('/login');
+          }, 3000);
         }
       } catch (error) {
-        console.error('Registration error details:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status
-        });
-        this.error = error.response?.data?.message || error.message || 'Registration failed. Please try again.';
+        console.error('Registration error:', error);
+        if (error.response?.data?.errors) {
+          // Handle validation errors from backend
+          const errors = error.response.data.errors;
+          this.error = Object.values(errors).flat().join(', ');
+        } else if (error.response?.data?.message) {
+          // Handle specific error message from backend
+          this.error = error.response.data.message;
+        } else if (error.message) {
+          // Handle general error message
+          this.error = error.message;
+        } else {
+          this.error = 'Registration failed. Please try again.';
+        }
         this.showNotification({
           type: 'error',
           message: this.error

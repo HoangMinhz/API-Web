@@ -3,6 +3,7 @@ using System;
 using Demo.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Demo.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250505202950_UpdateOrder")]
+    partial class UpdateOrder
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
@@ -26,41 +29,16 @@ namespace Demo.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Address")
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("CartId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("City")
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("District")
-                        .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("EmailConfirmationToken")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("EmailConfirmationTokenExpiry")
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("FullName")
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("INTEGER");
@@ -85,15 +63,7 @@ namespace Demo.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Province")
-                        .HasMaxLength(10)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("SecurityStamp")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("State")
-                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("TwoFactorEnabled")
@@ -104,8 +74,6 @@ namespace Demo.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CartId");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -182,9 +150,6 @@ namespace Demo.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("AppUserId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -217,8 +182,6 @@ namespace Demo.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AppUserId");
 
                     b.HasIndex("UserId");
 
@@ -307,9 +270,6 @@ namespace Demo.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("AppUserId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Comment")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -327,8 +287,6 @@ namespace Demo.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AppUserId");
 
                     b.HasIndex("ProductId");
 
@@ -463,15 +421,6 @@ namespace Demo.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("Demo.Models.AppUser", b =>
-                {
-                    b.HasOne("Demo.Models.Cart", "Cart")
-                        .WithMany()
-                        .HasForeignKey("CartId");
-
-                    b.Navigation("Cart");
-                });
-
             modelBuilder.Entity("Demo.Models.Cart", b =>
                 {
                     b.HasOne("Demo.Models.AppUser", "User")
@@ -502,10 +451,6 @@ namespace Demo.Migrations
 
             modelBuilder.Entity("Demo.Models.Order", b =>
                 {
-                    b.HasOne("Demo.Models.AppUser", null)
-                        .WithMany("Orders")
-                        .HasForeignKey("AppUserId");
-
                     b.HasOne("Demo.Models.AppUser", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -526,7 +471,7 @@ namespace Demo.Migrations
                     b.HasOne("Demo.Models.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Order");
@@ -547,10 +492,6 @@ namespace Demo.Migrations
 
             modelBuilder.Entity("Demo.Models.Review", b =>
                 {
-                    b.HasOne("Demo.Models.AppUser", null)
-                        .WithMany("Reviews")
-                        .HasForeignKey("AppUserId");
-
                     b.HasOne("Demo.Models.Product", "Product")
                         .WithMany("Reviews")
                         .HasForeignKey("ProductId")
@@ -617,13 +558,6 @@ namespace Demo.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Demo.Models.AppUser", b =>
-                {
-                    b.Navigation("Orders");
-
-                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("Demo.Models.Cart", b =>

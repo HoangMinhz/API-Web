@@ -239,6 +239,31 @@ export default {
         }, { root: true });
       }
     },
+    async clearCart({ commit, rootState }) {
+      try {
+        const token = rootState.user.token;
+        if (token) {
+          try {
+            // If authenticated, clear cart on server
+            await api.delete('/Cart/clear', {
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            });
+          } catch (error) {
+            // If the cart doesn't exist (404) or other error, we can still proceed
+            // as we want to clear the local cart anyway
+            console.warn('Server cart clear failed:', error);
+          }
+        }
+        // Clear local cart regardless of authentication status
+        localStorage.removeItem('cart');
+        commit('clearCart');
+      } catch (error) {
+        console.error('Clear cart failed:', error);
+        commit('setError', error.message || 'Failed to clear cart');
+      }
+    },
     async checkout({ commit, state }, orderData) {
       try {
         commit('setLoading', true);
@@ -271,6 +296,27 @@ export default {
     loading: state => state.loading,
     error: state => state.error,
     totalItems: state => state.items.reduce((total, item) => total + item.quantity, 0),
-    subtotal: state => state.items.reduce((total, item) => total + (item.product?.price || 0) * item.quantity, 0)
+    subtotal: state => {
+        const total = state.items.reduce((total, item) => {
+            const itemTotal = (item.product?.price || 0) * item.quantity;
+            return total + Math.round(itemTotal * 100) / 100;
+        }, 0);
+        return Math.round(total * 100) / 100;
+    },
+    tax: state => {
+        const tax = state.items.reduce((total, item) => {
+            const itemTotal = (item.product?.price || 0) * item.quantity;
+            return total + Math.round(itemTotal * 0.1 * 100) / 100;
+        }, 0);
+        return Math.round(tax * 100) / 100;
+    },
+    total: state => {
+        const subtotal = state.items.reduce((total, item) => {
+            const itemTotal = (item.product?.price || 0) * item.quantity;
+            return total + Math.round(itemTotal * 100) / 100;
+        }, 0);
+        const tax = Math.round(subtotal * 0.1 * 100) / 100;
+        return Math.round((subtotal + tax) * 100) / 100;
+    }
   }
 };

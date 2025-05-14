@@ -21,6 +21,7 @@ namespace Demo.Controllers
         }
 
         [HttpGet]
+        [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -53,6 +54,7 @@ namespace Demo.Controllers
         }
 
         [HttpGet("{id}")]
+        [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
         public async Task<IActionResult> GetById(int id)
         {
             try

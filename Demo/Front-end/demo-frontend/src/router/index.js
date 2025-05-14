@@ -12,6 +12,9 @@ import Shop from '../views/Shop.vue';
 import Checkout from '../views/Checkout.vue';
 import OrderConfirmation from '../views/OrderConfirmation.vue';
 import Wishlist from '../views/Wishlist.vue';
+import Orders from '../views/Orders.vue';
+import Profile from '../views/Profile.vue';
+import ConfirmEmail from '../views/ConfirmEmail.vue';
 
 const routes = [
   { path: '/', component: Home },
@@ -20,6 +23,7 @@ const routes = [
   { path: '/cart', component: Cart },
   { path: '/login', component: Login },
   { path: '/register', component: Register },
+  { path: '/confirm-email', component: ConfirmEmail },
   { 
     path: '/admin', 
     component: AdminPanel,
@@ -46,14 +50,29 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/order-confirmation',
+    path: '/order-confirmation/:id',
     name: 'order-confirmation',
-    component: OrderConfirmation
+    component: OrderConfirmation,
+    meta: {
+      requiresAuth: true
+    }
   },
   {
     path: '/wishlist',
     name: 'Wishlist',
     component: Wishlist,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/orders',
+    name: 'Orders',
+    component: Orders,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: Profile,
     meta: { requiresAuth: true }
   }
 ];
@@ -61,6 +80,19 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+// Navigation guard for routes that require authentication
+router.beforeEach((to, from, next) => {
+  if (to.matched.some(record => record.meta.requiresAuth)) {
+    if (!store.getters['user/isAuthenticated']) {
+      next('/login');
+    } else {
+      next();
+    }
+  } else {
+    next();
+  }
 });
 
 export default router;

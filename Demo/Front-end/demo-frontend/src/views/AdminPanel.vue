@@ -283,6 +283,7 @@ export default {
     await Promise.all([this.fetchProducts(), this.fetchCategories()]);
   },
   methods: {
+    formatPrice,
     async fetchProducts() {
       try {
         const response = await api.get('/Product');

@@ -129,19 +129,30 @@
           </div>
 
           <!-- User Profile -->
-          <div v-if="$store.getters['user/isAuthenticated']" class="relative group">
-            <button class="flex items-center space-x-2 focus:outline-none">
+          <div v-if="$store.getters['user/isAuthenticated']" class="relative">
+            <button @click="toggleUserMenu" class="flex items-center space-x-2 focus:outline-none">
               <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
                 {{ $store.state.user.user?.username?.charAt(0).toUpperCase() || 'U' }}
               </div>
             </button>
-            <div class="absolute right-0 hidden group-hover:block bg-white shadow-lg rounded-lg mt-2 w-48 overflow-hidden">
-              <div class="px-4 py-3 border-b border-gray-100">
-                <p class="text-sm font-medium text-gray-900">{{ $store.state.user.user?.username }}</p>
-                <p class="text-xs text-gray-500">{{ $store.state.user.user?.email }}</p>
-              </div>
-              <button @click="logout" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
-                Sign out
+            <div v-if="userMenuOpen" class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50">
+              <router-link
+                to="/profile"
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                My Profile
+              </router-link>
+              <router-link
+                to="/orders"
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                My Orders
+              </router-link>
+              <button
+                @click="logout"
+                class="block w-full text-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                Sign Out
               </button>
             </div>
           </div>
@@ -192,6 +203,7 @@ export default {
   data() {
     return {
       menuOpen: false,
+      userMenuOpen: false,
       searchQuery: '',
       mainLinks: [
         { to: '/', text: 'Home' },
@@ -211,8 +223,12 @@ export default {
     window.removeEventListener('scroll', this.handleScroll);
   },
   methods: {
+    toggleUserMenu() {
+      this.userMenuOpen = !this.userMenuOpen;
+    },
     toggleMenu() {
       this.menuOpen = !this.menuOpen;
+      this.userMenuOpen = false;
     },
     handleSearch() {
       if (this.searchQuery.trim()) {
@@ -229,6 +245,7 @@ export default {
       }
     },
     logout() {
+      this.userMenuOpen = false;
       this.$store.dispatch('user/logout');
       this.$router.push('/login');
       this.menuOpen = false;

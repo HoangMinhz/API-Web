@@ -8,13 +8,14 @@ using Microsoft.AspNetCore.Identity;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
+using Demo.Models.Services;
+using Microsoft.AspNetCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
-
 // Configure Identity with custom user and role
 builder.Services.AddIdentity<AppUser, IdentityRole<int>>(options =>
 {
@@ -112,6 +113,8 @@ builder.Services.AddLogging(logging =>
     logging.SetMinimumLevel(LogLevel.Information);
 });
 
+builder.Services.AddScoped<IEmailService, EmailService>();
+
 var app = builder.Build();
 
 // Apply CORS first in the pipeline
@@ -133,23 +136,19 @@ app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
     {
-        // Ensure CORS headers are added even in error responses
-        context.Response.Headers.Add("Access-Control-Allow-Origin", "http://localhost:5173");
-        context.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
-        context.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-
         context.Response.StatusCode = 500;
         context.Response.ContentType = "application/json";
-        var error = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+
+        var error = context.Features.Get<IExceptionHandlerFeature>();
         if (error != null)
         {
-            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogError(error.Error, "An unhandled exception occurred.");
-            await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new
+            var ex = error.Error;
+            await context.Response.WriteAsJsonAsync(new
             {
-                error = "An unexpected error occurred."
-            }));
+                message = ex.Message,
+                detail = ex.InnerException?.Message,
+                stackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null
+            });
         }
     });
 });
