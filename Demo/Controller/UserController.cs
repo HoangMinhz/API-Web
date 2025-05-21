@@ -313,6 +313,34 @@ namespace Demo.Controllers
                 return StatusCode(500, "An error occurred while changing password");
             }
         }
+
+        [HttpGet("{userId}/purchased-products")]
+        [Authorize]
+        public async Task<IActionResult> GetPurchasedProducts(int userId)
+        {
+            try
+            {
+                var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                if (userId != currentUserId && !User.IsInRole("Admin"))
+                {
+                    return Forbid();
+                }
+
+                var purchasedProducts = await _context.OrderItems
+                    .Include(oi => oi.Order)
+                    .Where(oi => oi.Order.UserId == userId && oi.Order.Status == OrderStatus.Shipped)
+                    .Select(oi => oi.ProductId)
+                    .Distinct()
+                    .ToListAsync();
+
+                return Ok(purchasedProducts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving purchased products for user {UserId}", userId);
+                return StatusCode(500, "An error occurred while retrieving purchased products");
+            }
+        }
     }
 
     public class UpdateProfileModel

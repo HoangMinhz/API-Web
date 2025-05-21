@@ -137,7 +137,7 @@
 <script>
 import api from '../services/api';
 import formatPrice from '../utils/formatPrice';
-import store from '../stores';
+import store from '../store';
 import router from '../router';
 
 export default {

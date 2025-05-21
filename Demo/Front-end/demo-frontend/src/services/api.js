@@ -1,9 +1,9 @@
 import axios from 'axios';
-import store from '../stores';
+import store from '../store';
 import router from '../router';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5285/api', // Thay bằng URL API của bạn
+  baseURL: 'http://localhost:5285/api', // Update to correct port
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -19,12 +19,18 @@ api.interceptors.request.use(
       '/Auth/login',
       '/Auth/register',
       '/Auth/confirm-email',
-      '/Product',
-      '/Category'
+      '/Product/get',
+      '/Product/list',
+      '/Category/get',
+      '/Category/list',
+      '/Review/get'
     ];
 
-    // Check if the current request is to a public endpoint
-    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url.includes(endpoint));
+    // Check if the current request is to a public endpoint AND it's a GET request
+    const isPublicEndpoint = publicEndpoints.some(endpoint => 
+      config.url.includes(endpoint) && 
+      (config.method === 'get' || config.url.includes('/Auth/'))
+    );
 
     if (!isPublicEndpoint) {
       const token = store.state.user.token;
@@ -140,5 +146,60 @@ api.interceptors.response.use(
     return Promise.reject(error.message || 'Đã xảy ra lỗi không mong muốn');
   }
 );
+
+// Thêm các phương thức xử lý review
+export const reviewService = {
+  // Lấy danh sách đánh giá của sản phẩm
+  getProductReviews: async (productId, page = 1, pageSize = 10) => {
+    try {
+      const response = await api.get(`/Review/product/${productId}`, {
+        params: { page, pageSize }
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Tạo đánh giá mới
+  createReview: async (reviewData) => {
+    try {
+      const response = await api.post('/Review', reviewData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Cập nhật đánh giá
+  updateReview: async (reviewId, reviewData) => {
+    try {
+      const response = await api.put(`/Review/${reviewId}`, reviewData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Xóa đánh giá
+  deleteReview: async (reviewId) => {
+    try {
+      const response = await api.delete(`/Review/${reviewId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Lấy danh sách sản phẩm đã mua của người dùng
+  getPurchasedProducts: async (userId) => {
+    try {
+      const response = await api.get(`/User/${userId}/purchased-products`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+};
 
 export default api;

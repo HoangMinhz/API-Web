@@ -4,6 +4,7 @@ using Demo.Data;
 using Demo.Models;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Demo.Controllers
 {
@@ -20,27 +21,24 @@ namespace Demo.Controllers
             _logger = logger;
         }
 
-        [HttpGet]
+        [HttpGet("list")]
+        [AllowAnonymous]
         [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetCategories()
         {
             try
             {
-                // Debug: Log the SQL query
                 var query = _context.Categories.ToQueryString();
                 _logger.LogInformation("SQL Query: {Query}", query);
 
-                // Get raw data from database
                 var categories = await _context.Categories.ToListAsync();
                 
-                // Debug: Log each category's data
                 foreach (var category in categories)
                 {
                     _logger.LogInformation("Category Data - Id: {Id}, Name: {Name}, ImageUrl: {ImageUrl}", 
                         category.Id, category.Name, category.ImageUrl);
                 }
 
-                // Debug: Log the serialized response
                 var json = JsonSerializer.Serialize(categories);
                 _logger.LogInformation("Response JSON: {Json}", json);
 
@@ -53,9 +51,10 @@ namespace Demo.Controllers
             }
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("get/{id}")]
+        [AllowAnonymous]
         [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
-        public async Task<IActionResult> GetById(int id)
+        public async Task<IActionResult> GetCategory(int id)
         {
             try
             {
@@ -63,7 +62,6 @@ namespace Demo.Controllers
                 if (category == null)
                     return NotFound();
 
-                // Debug: Log the category data
                 _logger.LogInformation("Category Data - Id: {Id}, Name: {Name}, ImageUrl: {ImageUrl}", 
                     category.Id, category.Name, category.ImageUrl);
 
@@ -77,18 +75,18 @@ namespace Demo.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Category category)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> PostCategory([FromBody] Category category)
         {
             try
             {
                 _context.Categories.Add(category);
                 await _context.SaveChangesAsync();
 
-                // Debug: Log the created category
                 _logger.LogInformation("Created Category - Id: {Id}, Name: {Name}, ImageUrl: {ImageUrl}", 
                     category.Id, category.Name, category.ImageUrl);
 
-                return CreatedAtAction(nameof(GetById), new { id = category.Id }, category);
+                return CreatedAtAction(nameof(GetCategory), new { id = category.Id }, category);
             }
             catch (Exception ex)
             {
@@ -98,7 +96,8 @@ namespace Demo.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Category category)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> PutCategory(int id, [FromBody] Category category)
         {
             try
             {
@@ -110,7 +109,6 @@ namespace Demo.Controllers
                 existingCategory.ImageUrl = category.ImageUrl;
                 await _context.SaveChangesAsync();
 
-                // Debug: Log the updated category
                 _logger.LogInformation("Updated Category - Id: {Id}, Name: {Name}, ImageUrl: {ImageUrl}", 
                     id, category.Name, category.ImageUrl);
 
@@ -124,7 +122,8 @@ namespace Demo.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteCategory(int id)
         {
             try
             {
@@ -135,6 +134,7 @@ namespace Demo.Controllers
                 _context.Categories.Remove(category);
                 await _context.SaveChangesAsync();
 
+                _logger.LogInformation("Deleted Category - Id: {Id}", id);
                 return NoContent();
             }
             catch (Exception ex)

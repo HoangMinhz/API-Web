@@ -1,14 +1,9 @@
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Demo.Models
+namespace Demo.Models.ViewModel
 {
-    [Table("Products")]
-    public class Product
+    public class CreateProductDto
     {
-        [Key]
-        public int Id { get; set; }
-        
         [Required(ErrorMessage = "Product name is required")]
         [StringLength(200)]
         public string Name { get; set; }
@@ -18,7 +13,6 @@ namespace Demo.Models
         
         [Required]
         [Range(0, double.MaxValue, ErrorMessage = "Price must be greater than 0")]
-        [Column(TypeName = "decimal(18,2)")]
         public decimal Price { get; set; }
         
         [Required]
@@ -30,28 +24,29 @@ namespace Demo.Models
         
         [Required(ErrorMessage = "Category is required")]
         public int CategoryId { get; set; }
-        
-        [ForeignKey("CategoryId")]
-        public virtual Category Category { get; set; }
-        
-        [Range(0, 5, ErrorMessage = "Rating must be between 0 and 5")]
-        public float Rating { get; set; }
-        
-        public int ReviewCount { get; set; }
-        
-        public DateTime CreatedAt { get; set; }
-        
-        public int SoldCount { get; set; }
-        
-        public virtual ICollection<Review> Reviews { get; set; }
-
-        public Product()
-        {
-            Rating = 0;
-            ReviewCount = 0;
-            SoldCount = 0;
-            CreatedAt = DateTime.UtcNow;
-            Reviews = new List<Review>();
-        }
     }
-}
+
+    public class UpdateProductDto
+    {
+        [Required(ErrorMessage = "Product name is required")]
+        [StringLength(200)]
+        public string Name { get; set; }
+        
+        [Required(ErrorMessage = "Product description is required")]
+        public string Description { get; set; }
+        
+        [Required]
+        [Range(0, double.MaxValue, ErrorMessage = "Price must be greater than 0")]
+        public decimal Price { get; set; }
+        
+        [Required]
+        [Range(0, int.MaxValue, ErrorMessage = "Stock quantity must be greater than or equal to 0")]
+        public int Stock { get; set; }
+        
+        [Required(ErrorMessage = "Image URL is required")]
+        public string ImageUrl { get; set; }
+        
+        [Required(ErrorMessage = "Category is required")]
+        public int CategoryId { get; set; }
+    }
+} 

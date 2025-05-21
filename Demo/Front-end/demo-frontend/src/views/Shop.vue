@@ -207,7 +207,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import api from '../services/api';
 import formatPrice from '../utils/formatPrice';
 
 export default {
@@ -252,7 +252,7 @@ export default {
     async fetchProducts() {
       try {
         console.log('Fetching products...');
-        const response = await axios.get('http://localhost:5285/api/Product');
+        const response = await api.get('/Product/list');
         console.log('Products response:', response.data);
         
         // Process and log each product's image URL
@@ -266,7 +266,7 @@ export default {
           
           // Fix image URL if it's relative
           if (product.imageUrl && !product.imageUrl.startsWith('http')) {
-            product.imageUrl = `http://localhost:5285${product.imageUrl}`;
+            product.imageUrl = `${api.defaults.baseURL}${product.imageUrl}`;
             console.log('Fixed Image URL:', product.imageUrl);
           }
           
@@ -282,7 +282,7 @@ export default {
     async fetchCategories() {
       try {
         console.log('Fetching categories...');
-        const response = await axios.get('http://localhost:5285/api/Category');
+        const response = await api.get('/Category/list');
         console.log('Categories response:', response.data);
         this.categories = response.data || [];
       } catch (error) {

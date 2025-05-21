@@ -148,9 +148,16 @@
               >
                 My Orders
               </router-link>
+              <router-link
+                v-if="$store.getters['user/isAdmin']"
+                to="/admin/orders"
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                Orders Management
+              </router-link>
               <button
                 @click="logout"
-                class="block w-full text-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                class="block w-full text-sm px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               >
                 Sign Out
               </button>

@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import store from '../stores';
+import store from '../store';
 import Home from '../views/Home.vue';
 import ProductDetail from '../views/ProductDetail.vue';
 import Categories from '../views/Categories.vue';
@@ -15,6 +15,7 @@ import Wishlist from '../views/Wishlist.vue';
 import Orders from '../views/Orders.vue';
 import Profile from '../views/Profile.vue';
 import ConfirmEmail from '../views/ConfirmEmail.vue';
+import OrdersManagement from '@/views/admin/OrdersManagement.vue'
 
 const routes = [
   { path: '/', component: Home },
@@ -74,6 +75,15 @@ const routes = [
     name: 'Profile',
     component: Profile,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin/orders',
+    name: 'AdminOrders',
+    component: OrdersManagement,
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true
+    }
   }
 ];
 

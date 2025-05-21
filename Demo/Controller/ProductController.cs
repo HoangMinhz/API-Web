@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Demo.Data;
 using Demo.Models;
+using Demo.Models.ViewModel;
 
 namespace Demo.Controllers
 {
@@ -20,12 +21,16 @@ namespace Demo.Controllers
         {
             _context = context;
             _logger = logger;
+            
+            // Configure JSON options to handle circular references
+            _context.ChangeTracker.LazyLoadingEnabled = false;
         }
 
         /// <summary>
         /// Gets all products, optionally filtered by category or search query.
         /// </summary>
-        [HttpGet]
+        [HttpGet("list")]
+        [AllowAnonymous]
         [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
         public async Task<IActionResult> GetProducts([FromQuery] int? categoryId, [FromQuery] string? search, [FromQuery] bool? newProducts)
         {
@@ -82,7 +87,8 @@ namespace Demo.Controllers
         /// <summary>
         /// Gets a product by ID.
         /// </summary>
-        [HttpGet("{id}")]
+        [HttpGet("get/{id}")]
+        [AllowAnonymous]
         [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
         public async Task<IActionResult> GetProduct(int id)
         {
@@ -135,70 +141,103 @@ namespace Demo.Controllers
         /// <summary>
         /// Creates a new product (Admin only).
         /// </summary>
+        [HttpPost]
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> CreateProduct([FromBody] Product model)
+[Authorize(Roles = "Admin")]
+public async Task<IActionResult> PostProduct(CreateProductDto productDto)
+{
+    try
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        // Check if category exists
+        var category = await _context.Categories
+            .FirstOrDefaultAsync(c => c.Id == productDto.CategoryId);
+            
+        if (category == null)
+        {
+            ModelState.AddModelError("CategoryId", "Danh mục không tồn tại");
+            return BadRequest(ModelState);
+        }
+
+        // Create new product from DTO
+        var product = new Product
+        {
+            Name = productDto.Name,
+            Description = productDto.Description,
+            Price = productDto.Price,
+            Stock = productDto.Stock,
+            ImageUrl = productDto.ImageUrl,
+            CategoryId = productDto.CategoryId,
+            Rating = 0,
+            ReviewCount = 0,
+            SoldCount = 0,
+            CreatedAt = DateTime.UtcNow,
+            Reviews = new List<Review>()
+        };
+
+        // Add and save
+        await _context.Products.AddAsync(product);
+        await _context.SaveChangesAsync();
+
+        // Return DTO to avoid circular references
+        var response = new ProductResponseDto
+        {
+            Id = product.Id,
+            Name = product.Name,
+            Description = product.Description,
+            Price = product.Price,
+            Stock = product.Stock,
+            ImageUrl = product.ImageUrl,
+            CategoryId = product.CategoryId
+        };
+
+        return Ok(response);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Lỗi khi tạo sản phẩm: {Message}", ex.Message);
+        return StatusCode(500, "Đã xảy ra lỗi khi tạo sản phẩm");
+    }
+}
+
+        /// <summary>
+        /// Updates a product (Admin only).
+        /// </summary>
+        [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> PutProduct(int id, UpdateProductDto productDto)
         {
             try
             {
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                var product = new Product
-                {
-                    Name = model.Name,
-                    Description = model.Description,
-                    Price = model.Price,
-                    Stock = model.Stock,
-                    ImageUrl = model.ImageUrl,
-                    CategoryId = model.CategoryId,
-                    Rating = 0,
-                    ReviewCount = 0,
-                    SoldCount = 0,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.Products.Add(product);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Created product {ProductId}.", product.Id);
-                return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating product");
-                return StatusCode(500, "An error occurred while creating the product");
-            }
-        }
-
-        /// <summary>
-        /// Updates a product (Admin only).
-        /// </summary>
-        [Authorize(Roles = "Admin")]
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProduct(int id, [FromBody] Product model)
-        {
-            try
-            {
-                if (id != model.Id || !ModelState.IsValid)
-                    return BadRequest();
-
-                var product = await _context.Products.FindAsync(id);
-                if (product == null)
+                var existingProduct = await _context.Products.FindAsync(id);
+                if (existingProduct == null)
                 {
                     _logger.LogWarning("Product {Id} not found for update.", id);
                     return NotFound();
                 }
 
-                product.Name = model.Name;
-                product.Description = model.Description;
-                product.Price = model.Price;
-                product.ImageUrl = model.ImageUrl;
-                product.Stock = model.Stock;
-                product.CategoryId = model.CategoryId;
-                product.Rating = model.Rating;
-                product.ReviewCount = model.ReviewCount;
-                product.SoldCount = model.SoldCount;
+                // Check if category exists
+                if (await _context.Categories.FindAsync(productDto.CategoryId) == null)
+                {
+                    ModelState.AddModelError("CategoryId", "Selected category does not exist");
+                    return BadRequest(ModelState);
+                }
+
+                // Update product properties
+                existingProduct.Name = productDto.Name;
+                existingProduct.Description = productDto.Description;
+                existingProduct.Price = productDto.Price;
+                existingProduct.ImageUrl = productDto.ImageUrl;
+                existingProduct.Stock = productDto.Stock;
+                existingProduct.CategoryId = productDto.CategoryId;
 
                 await _context.SaveChangesAsync();
                 _logger.LogInformation("Updated product {ProductId}.", id);
@@ -214,8 +253,8 @@ namespace Demo.Controllers
         /// <summary>
         /// Deletes a product (Admin only).
         /// </summary>
-        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
             try

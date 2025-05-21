@@ -436,12 +436,18 @@ namespace Demo.Controllers
 
         private string GenerateJwtToken(AppUser user, IList<string> roles)
         {
-            var claims = new[]
+            var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.Name, user.UserName)
             };
+
+            // Add roles to claims
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -455,6 +461,34 @@ namespace Demo.Controllers
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> Me()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return Unauthorized();
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            return Ok(new
+            {
+                user.Id,
+                user.Email,
+                user.UserName,
+                user.FullName,
+                user.Address,
+                user.City,
+                user.State,
+                user.Province,
+                user.District,
+                roles // trả về roles
+            });
         }
     }
 

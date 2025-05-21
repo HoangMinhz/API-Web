@@ -177,6 +177,9 @@
         <div v-else class="text-gray-500">No related products found.</div>
       </div>
     </div>
+
+    <!-- Add ProductReview component -->
+    <ProductReview :product-id="product.id" />
   </div>
   <div v-else class="flex justify-center items-center h-64">
     <span class="loader"></span>
@@ -186,9 +189,13 @@
 <script>
 import api from '../services/api';
 import formatPrice from '../utils/formatPrice';
+import ProductReview from '@/components/ProductReview.vue'
 
 export default {
   name: 'ProductDetailPage',
+  components: {
+    ProductReview
+  },
   data() {
     return {
       product: null,
@@ -202,13 +209,15 @@ export default {
   },
   async created() {
     try {
-      const response = await api.get(`/Product/${this.$route.params.id}`);
+      const response = await api.get(`/Product/get/${this.$route.params.id}`);
       this.product = response.data;
       
       // Fetch related products
       if (this.product?.categoryId) {
         try {
-          const relatedRes = await api.get(`/Product?categoryId=${this.product.categoryId}`);
+          const relatedRes = await api.get(`/Product/list`, {
+            params: { categoryId: this.product.categoryId }
+          });
           console.log('Related products response:', relatedRes.data); // Debug log
           
           // Ensure we have an array of products
@@ -227,7 +236,7 @@ export default {
       }
       
       // Fetch reviews
-      const reviewsRes = await api.get(`/Product/${this.$route.params.id}/reviews`);
+      const reviewsRes = await api.get(`/Review/list/${this.$route.params.id}`);
       this.reviews = reviewsRes.data || [];
       this.averageRating = this.reviews.length
         ? this.reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / this.reviews.length

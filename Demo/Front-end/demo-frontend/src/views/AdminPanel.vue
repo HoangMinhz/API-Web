@@ -49,86 +49,20 @@
 
       <!-- Products Tab -->
       <div v-if="activeTab === 'products'" class="space-y-8">
-        <!-- Add Product Form -->
-        <div class="bg-white rounded-lg shadow-sm p-6">
-          <h2 class="text-xl font-semibold text-gray-800 mb-4">Add New Product</h2>
-          <form @submit.prevent="addProduct" class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input
-                  v-model="newProduct.name"
-                  type="text"
-                  required
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select
-                  v-model="newProduct.categoryId"
-                  required
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select Category</option>
-                  <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                    {{ cat.name }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
-                <input
-                  v-model.number="newProduct.price"
-                  type="number"
-                  step="0.01"
-                  required
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Stock</label>
-                <input
-                  v-model.number="newProduct.stock"
-                  type="number"
-                  required
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div class="md:col-span-2">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  v-model="newProduct.description"
-                  required
-                  rows="3"
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                ></textarea>
-              </div>
-              <div class="md:col-span-2">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
-                <input
-                  v-model="newProduct.imageUrl"
-                  type="url"
-                  required
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            <div class="flex justify-end">
-              <button
-                type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Add Product
-              </button>
-            </div>
-          </form>
-        </div>
-
         <!-- Products Table -->
         <div class="bg-white rounded-lg shadow-sm overflow-hidden">
           <div class="p-4 border-b border-gray-200">
             <h2 class="text-xl font-semibold text-gray-800">Products</h2>
+          </div>
+          <div class="p-4 border-b border-gray-200">
+            <button
+              @click="openAddProductModal"
+              class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"            >
+              <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+              </svg>
+              Add New Product
+            </button>
           </div>
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -244,17 +178,134 @@
       </div>
     </div>
   </div>
+
+  <!-- Add Product Modal -->
+  <div v-if="showAddModal" class="fixed inset-0 overflow-y-auto z-50">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+      </div>
+
+      <!-- Modal panel -->
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <form @submit.prevent="addProduct">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Product Name *
+              </label>
+              <input
+                type="text"
+                v-model="newProduct.name"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Description *
+              </label>
+              <textarea
+                v-model="newProduct.description"
+                required
+                rows="3"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              ></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Price *
+                </label>
+                <input
+                  type="number"
+                  v-model="newProduct.price"
+                  required
+                  min="0"
+                  step="0.01"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Stock *
+                </label>
+                <input
+                  type="number"
+                  v-model="newProduct.stock"
+                  required
+                  min="0"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Category *
+              </label>
+              <select
+                v-model.number="newProduct.categoryId"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option disabled value="">Select a category</option>
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
+              </select>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Image URL *
+              </label>
+              <input
+                type="text"
+                v-model="newProduct.imageUrl"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              <p class="mt-1 text-sm text-gray-500">Enter a valid URL for the product image</p>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Add Product
+            </button>
+            <button
+              type="button"
+              @click="closeAddModal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
 import api from '../services/api';
 import formatPrice from '../utils/formatPrice';
+import axios from 'axios';
 
 export default {
   name: 'AdminPanel',
   data() {
     return {
       activeTab: 'products',
+      showAddModal: false,
       tabs: [
         { id: 'products', name: 'Products' },
         { id: 'categories', name: 'Categories' }
@@ -267,7 +318,7 @@ export default {
         price: 0,
         imageUrl: '',
         stock: 0,
-        categoryId: ''
+        categoryId: null
       },
       newCategory: {
         name: ''
@@ -286,7 +337,7 @@ export default {
     formatPrice,
     async fetchProducts() {
       try {
-        const response = await api.get('/Product');
+        const response = await api.get('/Product/list');
         this.products = response.data;
       } catch (error) {
         console.error('Failed to fetch products:', error);
@@ -298,7 +349,7 @@ export default {
     },
     async fetchCategories() {
       try {
-        const response = await api.get('/Category');
+        const response = await api.get('/Category/list');
         this.categories = response.data;
       } catch (error) {
         console.error('Failed to fetch categories:', error);
@@ -310,25 +361,132 @@ export default {
     },
     async addProduct() {
       try {
-        await api.post('/Product', this.newProduct);
-        await this.fetchProducts();
-        this.newProduct = {
-          name: '',
-          description: '',
-          price: 0,
-          imageUrl: '',
-          stock: 0,
-          categoryId: ''
+        // Validate form data
+        if (!this.newProduct.name || !this.newProduct.description || 
+            !this.newProduct.price || !this.newProduct.stock || 
+            !this.newProduct.imageUrl || !this.newProduct.categoryId) {
+          this.$store.dispatch('notification/showNotification', {
+            type: 'error',
+            message: 'Please fill in all product information'
+          }, { root: true });
+          return;
+        }
+
+        // Validate numeric fields
+        const price = parseFloat(this.newProduct.price);
+        const stock = parseInt(this.newProduct.stock);
+        const categoryId = parseInt(this.newProduct.categoryId);
+
+        if (isNaN(price) || price <= 0) {
+          this.$store.dispatch('notification/showNotification', {
+            type: 'error',
+            message: 'Invalid product price'
+          }, { root: true });
+          return;
+        }
+
+        if (isNaN(stock) || stock < 0) {
+          this.$store.dispatch('notification/showNotification', {
+            type: 'error',
+            message: 'Invalid stock quantity'
+          }, { root: true });
+          return;
+        }
+
+        if (isNaN(categoryId) || categoryId <= 0) {
+          this.$store.dispatch('notification/showNotification', {
+            type: 'error',
+            message: 'Please select a product category'
+          }, { root: true });
+          return;
+        }
+
+        // Use a direct axios call to avoid any interceptor issues
+        const token = this.$store.state.user.token;
+        if (!token) {
+          this.$store.dispatch('notification/showNotification', {
+            type: 'error',
+            message: 'You must be logged in to add products'
+          }, { root: true });
+          return;
+        }
+
+        // Prepare product data with capital first letter properties to match C# model
+        const productData = {
+          Name: this.newProduct.name.trim(),
+          Description: this.newProduct.description.trim(),
+          Price: price,
+          Stock: stock,
+          ImageUrl: this.newProduct.imageUrl.trim(),
+          CategoryId: categoryId
         };
+
+        console.log('Sending product data to API:', JSON.stringify(productData, null, 2));
+        
+        // Direct axios request with proper headers
+        const response = await axios.post('http://localhost:5285/api/Product', productData, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        console.log('API Response:', response.data);
+        
+        // Add new product to list
+        this.products.push(response.data);
+        
+        // Show success message
         this.$store.dispatch('notification/showNotification', {
           type: 'success',
           message: 'Product added successfully'
         }, { root: true });
+
+        // Close modal and reset form
+        this.closeAddModal();
+        
+        // Refresh product list to get latest data
+        await this.fetchProducts();
       } catch (error) {
         console.error('Failed to add product:', error);
+        
+        // Detailed error logging
+        if (error.response) {
+          console.error('Error response data:', error.response.data);
+          console.error('Error response status:', error.response.status);
+          
+          // Log model state errors if present
+          if (error.response.data && error.response.data.errors) {
+            console.error('Validation errors:', error.response.data.errors);
+          }
+        }
+        
+        // Better error message extraction
+        let errorMessage = 'Unable to add product';
+        
+        if (error.response && error.response.data) {
+          if (typeof error.response.data === 'string') {
+            errorMessage = error.response.data;
+          } else if (error.response.data.message) {
+            errorMessage = error.response.data.message;
+          } else if (error.response.data.errors) {
+            // Try to get specific validation errors
+            const errors = error.response.data.errors;
+            if (errors.CategoryId) {
+              errorMessage = errors.CategoryId[0];
+            } else {
+              // Combine all error messages
+              const allErrors = Object.values(errors).flat();
+              if (allErrors.length > 0) {
+                errorMessage = allErrors.join(', ');
+              }
+            }
+          }
+        }
+        
         this.$store.dispatch('notification/showNotification', {
           type: 'error',
-          message: 'Failed to add product'
+          message: errorMessage
         }, { root: true });
       }
     },
@@ -391,6 +549,21 @@ export default {
     editProduct(product) {
       // TODO: Implement edit functionality
       console.log('Edit product:', product);
+    },
+    openAddProductModal() {
+      this.showAddModal = true;
+      // Reset form
+      this.newProduct = {
+        name: '',
+        description: '',
+        price: 0,
+        imageUrl: '',
+        stock: 0,
+        categoryId: null
+      };
+    },
+    closeAddModal() {
+      this.showAddModal = false;
     }
   }
 };

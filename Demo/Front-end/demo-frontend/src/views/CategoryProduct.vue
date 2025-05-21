@@ -89,7 +89,7 @@
       formatPrice,
       async fetchProducts() {
         try {
-          const response = await api.get('/Product');
+          const response = await api.get('/Product/list');
           this.products = response.data;
         } catch (err) {
           this.productsError = err.response?.data?.message || 'Failed to load products';
@@ -98,7 +98,7 @@
       },
       async fetchCategories() {
         try {
-          const response = await api.get('/Category');
+          const response = await api.get('/Category/list');
           this.categories = response.data;
         } catch (err) {
           console.error('Fetch categories error:', err);

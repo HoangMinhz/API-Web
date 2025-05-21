@@ -420,31 +420,33 @@ export default {
     formatPrice,
     async fetchProducts() {
       try {
-        const response = await api.get('/Product');
+        const response = await api.get('/Product/list');
         this.products = response.data.sort((a, b) => {
           const scoreA = (a.soldCount || 0) * 0.6 + (a.rating || 0) * 0.4;
           const scoreB = (b.soldCount || 0) * 0.6 + (b.rating || 0) * 0.4;
           return scoreB - scoreA;
         });
       } catch (err) {
-        this.productsError = err.response?.data?.message || 'Failed to load products';
+        this.productsError = err.response?.data?.message || 'Unable to load product list';
         console.error('Fetch products error:', err);
       }
     },
     async fetchNewProducts() {
       try {
-        const response = await api.get('/Product?new=true');
+        const response = await api.get('/Product/list', {
+          params: { newProducts: true }
+        });
         this.newProducts = response.data
           .slice(0, 8)
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       } catch (err) {
-        this.newProductsError = err.response?.data?.message || 'Failed to load new products';
+        this.newProductsError = err.response?.data?.message || 'Unable to load new products';
         console.error('Fetch new products error:', err);
       }
     },
     async fetchCategories() {
       try {
-        const response = await api.get('/Category');
+        const response = await api.get('/Category/list');
         this.categories = response.data;
         console.log('Categories data:', this.categories);
         // Debug each category's image URL
@@ -457,7 +459,7 @@ export default {
           });
         });
       } catch (err) {
-        this.categoriesError = err.response?.data?.message || 'Failed to load categories';
+        this.categoriesError = err.response?.data?.message || 'Unable to load categories';
         console.error('Fetch categories error:', err);
       }
     },

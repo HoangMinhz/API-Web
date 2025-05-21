@@ -276,29 +276,103 @@ namespace Demo.Controllers
             }
         }
 
+        private bool IsValidStatusTransition(OrderStatus currentStatus, OrderStatus newStatus)
+        {
+            // Define valid transitions
+            switch (currentStatus)
+            {
+                case OrderStatus.Pending:
+                    return newStatus == OrderStatus.Processing || newStatus == OrderStatus.Cancelled;
+                case OrderStatus.Processing:
+                    return newStatus == OrderStatus.Shipped || newStatus == OrderStatus.Cancelled;
+                case OrderStatus.Shipped:
+                    return newStatus == OrderStatus.Delivered || newStatus == OrderStatus.Cancelled;
+                case OrderStatus.Delivered:
+                    return false; // Final state, no transitions allowed
+                case OrderStatus.Cancelled:
+                    return false; // Final state, no transitions allowed
+                default:
+                    return false;
+            }
+        }
+
         [HttpPut("{id}/status")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderStatusModel model)
         {
             try
             {
+                _logger.LogInformation("Attempting to update order {OrderId} status to {NewStatus}", id, model.Status);
+
+                if (!Enum.IsDefined(typeof(OrderStatus), model.Status))
+                {
+                    _logger.LogWarning("Invalid status value {Status} for order {OrderId}", model.Status, id);
+                    return BadRequest(new { message = $"Invalid status value: {model.Status}" });
+                }
+
                 var order = await _context.Orders
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(oi => oi.Product)
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(o => o.Id == id);
 
                 if (order == null)
-                    return NotFound();
+                {
+                    _logger.LogWarning("Order {OrderId} not found", id);
+                    return NotFound(new { message = $"Order with ID {id} not found" });
+                }
 
-                order.Status = model.Status;
+                // Validate status transition
+                if (!IsValidStatusTransition(order.Status, model.Status))
+                {
+                    _logger.LogWarning("Invalid status transition for order {OrderId} from {CurrentStatus} to {NewStatus}", 
+                        id, order.Status, model.Status);
+                    return BadRequest(new { 
+                        message = $"Invalid status transition from {order.Status} to {model.Status}",
+                        currentStatus = order.Status,
+                        requestedStatus = model.Status
+                    });
+                }
+
+                // Update using a new context to avoid tracking issues
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        var orderToUpdate = await _context.Orders.FindAsync(id);
+                        if (orderToUpdate != null)
+                        {
+                            var oldStatus = orderToUpdate.Status;
+                            orderToUpdate.Status = model.Status;
                 await _context.SaveChangesAsync();
+                            await transaction.CommitAsync();
 
-                return Ok(order);
+                            _logger.LogInformation("Successfully updated order {OrderId} status from {OldStatus} to {NewStatus}", 
+                                id, oldStatus, model.Status);
+
+                            return Ok(new
+                            {
+                                id = orderToUpdate.Id,
+                                status = orderToUpdate.Status,
+                                message = "Order status updated successfully"
+                            });
+                        }
+                        return NotFound(new { message = $"Order with ID {id} not found" });
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                }
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Database error updating status for order {OrderId}", id);
+                return StatusCode(500, new { message = "A database error occurred while updating the order status" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating order status for order {OrderId}", id);
-                return StatusCode(500, "An error occurred while updating the order status");
+                return StatusCode(500, new { message = "An error occurred while updating the order status" });
             }
         }
 
@@ -330,6 +404,196 @@ namespace Demo.Controllers
                 _logger.LogError(ex, "Error recalculating order totals");
                 return StatusCode(500, "An error occurred while recalculating order totals");
             }
+        }
+
+        [HttpGet("admin/orders")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAllOrders([FromQuery] OrderFilterModel filter)
+        {
+            try
+            {
+                var query = _context.Orders
+                    .AsNoTracking()
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(oi => oi.Product)
+                    .Include(o => o.User)
+                    .AsQueryable();
+
+                // Apply filters
+                if (filter.Status.HasValue)
+                {
+                    query = query.Where(o => o.Status == filter.Status.Value);
+                }
+
+                if (!string.IsNullOrEmpty(filter.SearchTerm))
+                {
+                    query = query.Where(o =>
+                        o.Id.ToString().Contains(filter.SearchTerm) ||
+                        o.User.UserName.Contains(filter.SearchTerm) ||
+                        o.User.Email.Contains(filter.SearchTerm) ||
+                        o.FullName.Contains(filter.SearchTerm) ||
+                        o.PhoneNumber.Contains(filter.SearchTerm)
+                    );
+                }
+
+                if (filter.FromDate.HasValue)
+                {
+                    query = query.Where(o => o.OrderDate >= filter.FromDate.Value);
+                }
+
+                if (filter.ToDate.HasValue)
+                {
+                    query = query.Where(o => o.OrderDate <= filter.ToDate.Value);
+                }
+
+                // Apply sorting
+                query = filter.SortBy?.ToLower() switch
+                {
+                    "date_desc" => query.OrderByDescending(o => o.OrderDate),
+                    "date_asc" => query.OrderBy(o => o.OrderDate),
+                    "amount_desc" => query.OrderByDescending(o => o.TotalAmount),
+                    "amount_asc" => query.OrderBy(o => o.TotalAmount),
+                    _ => query.OrderByDescending(o => o.OrderDate)
+                };
+
+                // Apply pagination
+                var pageSize = filter.PageSize ?? 10;
+                var page = filter.Page ?? 1;
+                var totalItems = await query.CountAsync();
+                var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
+
+                var orders = await query
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(o => new AdminOrderDto
+                    {
+                        Id = o.Id,
+                        OrderDate = o.OrderDate,
+                        Status = o.Status,
+                        TotalAmount = o.TotalAmount,
+                        ShippingAddress = o.ShippingAddress,
+                        PhoneNumber = o.PhoneNumber,
+                        FullName = o.FullName,
+                        Notes = o.Notes,
+                        UserInfo = new UserInfoDto
+                        {
+                            Id = o.User.Id,
+                            UserName = o.User.UserName,
+                            Email = o.User.Email
+                        },
+                        OrderItems = o.OrderItems.Select(oi => new OrderItemDto
+                        {
+                            Id = oi.Id,
+                            Quantity = oi.Quantity,
+                            UnitPrice = oi.UnitPrice,
+                            TotalPrice = oi.TotalPrice,
+                            Product = new ProductDto
+                            {
+                                Id = oi.Product.Id,
+                                Name = oi.Product.Name,
+                                ImageUrl = oi.Product.ImageUrl
+                            }
+                        }).ToList()
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    Orders = orders,
+                    TotalItems = totalItems,
+                    TotalPages = totalPages,
+                    CurrentPage = page
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all orders");
+                return StatusCode(500, "An error occurred while getting orders");
+            }
+        }
+
+        [HttpPut("admin/orders/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateOrderDetails(int id, [FromBody] UpdateOrderDetailsModel model)
+        {
+            try
+            {
+                var order = await _context.Orders
+                    .Include(o => o.OrderItems)
+                    .FirstOrDefaultAsync(o => o.Id == id);
+
+                if (order == null)
+                {
+                    return NotFound();
+                }
+
+                // Update order details
+                order.ShippingAddress = model.ShippingAddress ?? order.ShippingAddress;
+                order.PhoneNumber = model.PhoneNumber ?? order.PhoneNumber;
+                order.FullName = model.FullName ?? order.FullName;
+                order.Notes = model.Notes ?? order.Notes;
+
+                if (model.Status.HasValue)
+                {
+                    order.Status = model.Status.Value;
+                }
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Updated order {OrderId} details", id);
+
+                return Ok(new { message = "Order updated successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating order {OrderId}", id);
+                return StatusCode(500, "An error occurred while updating the order");
+            }
+        }
+
+        [HttpGet("admin/orders/statistics")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetOrderStatistics([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
+        {
+            try
+            {
+                var query = _context.Orders.AsQueryable();
+
+                if (fromDate.HasValue)
+                {
+                    query = query.Where(o => o.OrderDate >= fromDate.Value);
+                }
+
+                if (toDate.HasValue)
+                {
+                    query = query.Where(o => o.OrderDate <= toDate.Value);
+                }
+
+                var statistics = await query
+                    .GroupBy(o => o.Status)
+                    .Select(g => new
+                    {
+                        Status = g.Key,
+                        Count = g.Count(),
+                        TotalAmount = g.Sum(o => o.TotalAmount)
+                    })
+                    .ToListAsync();
+
+                var totalOrders = await query.CountAsync();
+                var totalRevenue = await query.SumAsync(o => o.TotalAmount);
+                var averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+                return Ok(new
+                {
+                    OrdersByStatus = statistics,
+                    TotalOrders = totalOrders,
+                    TotalRevenue = totalRevenue,
+                    AverageOrderValue = averageOrderValue
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting order statistics");
+                return StatusCode(500, "An error occurred while getting order statistics");
         }
     }
 
@@ -368,6 +632,40 @@ namespace Demo.Controllers
     public class UpdateOrderStatusModel
     {
         [Required]
+            [Range(0, 4, ErrorMessage = "Status must be between 0 and 4")]
         public OrderStatus Status { get; set; }
+        }
+
+        public class OrderFilterModel
+        {
+            public int? Page { get; set; }
+            public int? PageSize { get; set; }
+            public OrderStatus? Status { get; set; }
+            public string? SearchTerm { get; set; }
+            public DateTime? FromDate { get; set; }
+            public DateTime? ToDate { get; set; }
+            public string? SortBy { get; set; }
+        }
+
+        public class AdminOrderDto : OrderDto
+        {
+            public UserInfoDto UserInfo { get; set; }
+        }
+
+        public class UserInfoDto
+        {
+            public int Id { get; set; }
+            public string UserName { get; set; }
+            public string Email { get; set; }
+        }
+
+        public class UpdateOrderDetailsModel
+        {
+            public string ShippingAddress { get; set; }
+            public string PhoneNumber { get; set; }
+            public string FullName { get; set; }
+            public string Notes { get; set; }
+            public OrderStatus? Status { get; set; }
+        }
     }
 }

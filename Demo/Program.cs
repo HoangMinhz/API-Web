@@ -10,6 +10,7 @@ using Microsoft.OpenApi.Models;
 using System.Reflection;
 using Demo.Models.Services;
 using Microsoft.AspNetCore.Diagnostics;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -57,11 +58,28 @@ builder.Services.AddAuthentication(options =>
                 context.Response.Headers.Add("Token-Expired", "true");
             }
             return Task.CompletedTask;
+        },
+        OnTokenValidated = async context =>
+        {
+            var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<AppUser>>();
+            var user = await userManager.FindByIdAsync(context.Principal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            if (user != null)
+            {
+                var roles = await userManager.GetRolesAsync(user);
+                var claims = new List<Claim>();
+                foreach (var role in roles)
+                {
+                    claims.Add(new Claim(ClaimTypes.Role, role));
+                }
+                var appIdentity = new ClaimsIdentity(claims);
+                context.Principal.AddIdentity(appIdentity);
+            }
         }
     };
 });
 
 builder.Services.AddControllers();
+    
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger with JWT support
