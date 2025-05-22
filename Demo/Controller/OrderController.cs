@@ -127,6 +127,85 @@ namespace Demo.Controllers
                 return StatusCode(500, new { message = "An unexpected error occurred", error = ex.Message });
             }
         }
+        [HttpPut("{id}/cancel")]
+        public async Task<IActionResult> CancelOrder(int id)
+        {
+            try
+            {
+                _logger.LogInformation("Attempting to cancel order {OrderId}", id);
+
+                var userId = GetUserId();
+                if (!userId.HasValue)
+                {
+                    _logger.LogWarning("CancelOrder - User ID not found in claims");
+                    return Unauthorized();
+                }
+
+                var order = await _context.Orders
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(oi => oi.Product)
+                    .FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId.Value);
+
+                if (order == null)
+                {
+                    _logger.LogWarning("CancelOrder - Order {OrderId} not found for user {UserId}", id, userId.Value);
+                    return NotFound(new { message = $"Order with ID {id} not found" });
+                }
+
+                // Check if the order can be cancelled
+                if (order.Status != OrderStatus.Pending && order.Status != OrderStatus.Processing)
+                {
+                    _logger.LogWarning("CancelOrder - Cannot cancel order {OrderId} with status {Status}", id, order.Status);
+                    return BadRequest(new { message = $"Cannot cancel an order with status {order.Status}" });
+                }
+
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        // Return items to inventory
+                        foreach (var item in order.OrderItems)
+                        {
+                            var product = item.Product;
+                            product.Stock += item.Quantity;
+                            product.SoldCount -= item.Quantity;
+                            _logger.LogInformation("Returned {Quantity} items of product {ProductId} to inventory", 
+                                item.Quantity, product.Id);
+                        }
+
+                        // Update order status
+                        order.Status = OrderStatus.Cancelled;
+                        await _context.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        _logger.LogInformation("Successfully cancelled order {OrderId}", id);
+
+                        return Ok(new
+                        {
+                            id = order.Id,
+                            status = order.Status,
+                            message = "Order cancelled successfully"
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        _logger.LogError(ex, "Error during order cancellation transaction for order {OrderId}", id);
+                        throw;
+                    }
+                }
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Database error cancelling order {OrderId}", id);
+                return StatusCode(500, new { message = "A database error occurred while cancelling the order" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling order {OrderId}", id);
+                return StatusCode(500, new { message = "An error occurred while cancelling the order" });
+            }
+        }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetOrder(int id)
@@ -331,7 +410,7 @@ namespace Demo.Controllers
                         requestedStatus = model.Status
                     });
                 }
-
+                
                 // Update using a new context to avoid tracking issues
                 using (var transaction = await _context.Database.BeginTransactionAsync())
                 {
@@ -579,23 +658,28 @@ namespace Demo.Controllers
                     .ToListAsync();
 
                 var totalOrders = await query.CountAsync();
-                var totalRevenue = await query.SumAsync(o => o.TotalAmount);
-                var averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+                
+                // Calculate revenue excluding cancelled orders
+                var revenueQuery = query.Where(o => o.Status != OrderStatus.Cancelled);
+                var totalRevenue = await revenueQuery.SumAsync(o => o.TotalAmount);
+                var completedOrdersCount = await revenueQuery.CountAsync();
+                var averageOrderValue = completedOrdersCount > 0 ? totalRevenue / completedOrdersCount : 0;
 
                 return Ok(new
                 {
                     OrdersByStatus = statistics,
                     TotalOrders = totalOrders,
                     TotalRevenue = totalRevenue,
-                    AverageOrderValue = averageOrderValue
+                    AverageOrderValue = averageOrderValue,
+                    CompletedOrdersCount = completedOrdersCount
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting order statistics");
                 return StatusCode(500, "An error occurred while getting order statistics");
+            }
         }
-    }
 
     public class CreateOrderModel
     {

@@ -186,9 +186,8 @@
       <div class="fixed inset-0 transition-opacity" aria-hidden="true">
         <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
       </div>
-
       <!-- Modal panel -->
-      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+  <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
         <form @submit.prevent="addProduct">
           <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div class="mb-4">
@@ -293,6 +292,108 @@
       </div>
     </div>
   </div>
+
+  <!-- Edit Product Modal -->
+  <div v-if="showEditModal" class="fixed inset-0 overflow-y-auto z-50">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+      </div>
+
+      <!-- Modal panel -->
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <form @submit.prevent="updateProduct">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Tên Sản Phẩm *
+              </label>
+              <input
+                type="text"
+                v-model="editingProduct.name"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Mô Tả
+              </label>
+              <textarea
+                v-model="editingProduct.description"
+                rows="3"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              ></textarea>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Giá *
+              </label>
+              <input
+                type="number"
+                v-model="editingProduct.price"
+                required
+                min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Số Lượng *
+              </label>
+              <input
+                type="number"
+                v-model="editingProduct.stock"
+                required
+                min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                URL Hình Ảnh
+              </label>
+              <input
+                type="text"
+                v-model="editingProduct.imageUrl"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Danh Mục *
+              </label>
+              <select
+                v-model="editingProduct.categoryId"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cập Nhật
+            </button>
+            <button
+              type="button"
+              @click="closeEditModal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Hủy
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -306,6 +407,7 @@ export default {
     return {
       activeTab: 'products',
       showAddModal: false,
+      showEditModal: false, // Add this missing property
       tabs: [
         { id: 'products', name: 'Products' },
         { id: 'categories', name: 'Categories' }
@@ -322,6 +424,15 @@ export default {
       },
       newCategory: {
         name: ''
+      },
+      editingProduct: { // Add this missing property with default values
+        id: null,
+        name: '',
+        description: '',
+        price: 0,
+        stock: 0,
+        imageUrl: '',
+        categoryId: null
       }
     };
   },
@@ -547,10 +658,47 @@ export default {
       return this.products.filter(p => p.categoryId === categoryId).length;
     },
     editProduct(product) {
-      // TODO: Implement edit functionality
-      console.log('Edit product:', product);
+      this.editingProduct = {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        stock: product.stock,
+        imageUrl: product.imageUrl,
+        categoryId: product.categoryId
+      };
+      this.showEditModal = true;
     },
-    openAddProductModal() {
+    closeEditModal() {
+      this.showEditModal = false;
+      this.editingProduct = {
+        id: null,
+        name: '',
+        description: '',
+        price: 0,
+        stock: 0,
+        imageUrl: '',
+        categoryId: null
+      };
+    },
+    async updateProduct() {
+      try {
+        await api.put(`/Product/${this.editingProduct.id}`, this.editingProduct);
+        this.$store.dispatch('notification/showNotification', {
+          type: 'success',
+          message: 'Sản phẩm đã được cập nhật thành công'
+        });
+        this.closeEditModal();
+        await this.fetchProducts();
+      } catch (error) {
+        console.error('Failed to update product:', error);
+        this.$store.dispatch('notification/showNotification', {
+          type: 'error',
+          message: 'Không thể cập nhật sản phẩm'
+        });
+      }
+    },
+      openAddProductModal() {
       this.showAddModal = true;
       // Reset form
       this.newProduct = {

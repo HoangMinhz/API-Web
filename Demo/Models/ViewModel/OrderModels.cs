@@ -24,7 +24,6 @@ namespace Demo.Models.ViewModel
         public decimal TotalPrice { get; set; }
         public ProductDto Product { get; set; }
     }
-
     public class ProductDto
     {
         public int Id { get; set; }

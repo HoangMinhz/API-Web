@@ -118,31 +118,6 @@
         <h2 class="text-xl font-bold mb-2">Product Description</h2>
         <p class="text-gray-700">{{ product.description }}</p>
       </div>
-      <div v-else-if="activeTab === 'Reviews'">
-        <h2 class="text-xl font-bold mb-4">Customer Reviews</h2>
-        <div v-if="reviews.length">
-          <div class="space-y-6">
-            <div v-for="review in reviews" :key="review.id" class="bg-gray-50 rounded-lg p-4 shadow">
-              <div class="flex items-center mb-2">
-                <span class="font-semibold text-gray-800 mr-2">{{ review.userName }}</span>
-                <div class="flex items-center">
-                  <template v-for="i in 5">
-                    <svg v-if="i <= review.rating" :key="'review-full-' + i" class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.97a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.357 2.44a1 1 0 00-.364 1.118l1.287 3.97c.3.921-.755 1.688-1.54 1.118l-3.357-2.44a1 1 0 00-1.175 0l-3.357 2.44c-.784.57-1.838-.197-1.54-1.118l1.287-3.97a1 1 0 00-.364-1.118L2.73 9.397c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.97z" />
-                    </svg>
-                    <svg v-else :key="'review-empty-' + i" class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.97a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.357 2.44a1 1 0 00-.364 1.118l1.287 3.97c.3.921-.755 1.688-1.54 1.118l-3.357-2.44a1 1 0 00-1.175 0l-3.357 2.44c-.784.57-1.838-.197-1.54-1.118l1.287-3.97a1 1 0 00-.364-1.118L2.73 9.397c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.97z" />
-                    </svg>
-                  </template>
-                </div>
-                <span class="ml-2 text-xs text-gray-500">{{ new Date(review.date).toLocaleDateString() }}</span>
-              </div>
-              <p class="text-gray-700">{{ review.comment }}</p>
-            </div>
-          </div>
-        </div>
-        <div v-else class="text-gray-500">No reviews yet.</div>
-      </div>
       <div v-else-if="activeTab === 'Related Products'">
         <h2 class="text-xl font-bold mb-4">Related Products</h2>
         <div v-if="relatedProducts.length" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -178,6 +153,112 @@
       </div>
     </div>
 
+    <!-- Add Rating Button -->
+    <div v-if="isLoadingReviewStatus" class="mt-6 bg-white rounded-lg shadow p-6 text-sm text-gray-600">
+      Loading review status...
+    </div>
+    <div v-else class="mt-6 bg-white rounded-lg shadow p-6">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">Your Review</h2>
+        <button 
+          v-if="canReview"
+          @click="openRatingModal"
+          :disabled="!$store.getters['user/isAuthenticated']"
+          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+          {{ hasUserReview ? 'Edit Your Review' : 'Write a Review' }}
+        </button>
+      </div>
+      <p v-if="!$store.getters['user/isAuthenticated']" class="mt-2 text-sm text-red-500">
+        Please log in to leave a review.
+      </p>
+      <p v-else-if="!canReview" class="mt-2 text-sm text-amber-600">
+        You can write a review after purchasing this product.
+      </p>
+      <div v-else-if="hasUserReview && userReview" class="mt-4 bg-gray-50 rounded-lg p-4">
+        <div class="flex items-center mb-2">
+          <div class="flex items-center">
+            <template v-for="i in 5">
+              <svg v-if="i <= userReview.rating" :key="'user-full-' + i" class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.97a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.357 2.44a1 1 0 00-.364 1.118l1.287 3.97c.3.921-.755 1.688-1.54 1.118l-3.357-2.44a1 1 0 00-1.175 0l-3.357 2.44c-.784.57-1.838-.197-1.54-1.118l1.287-3.97a1 1 0 00-.364-1.118L2.73 9.397c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.97z" />
+              </svg>
+              <svg v-else :key="'user-empty-' + i" class="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.97a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.357 2.44a1 1 0 00-.364 1.118l1.287 3.97c.3.921-.755 1.688-1.54 1.118l-3.357-2.44a1 1 0 00-1.175 0l-3.357 2.44c-.784.57-1.838-.197-1.54-1.118l1.287-3.97a1 1 0 00-.364-1.118L2.73 9.397c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.97z" />
+              </svg>
+            </template>
+          </div>
+          <span class="ml-2 text-xs text-gray-500">{{ new Date(userReview.createdAt).toLocaleDateString() }}</span>
+        </div>
+        <p class="text-gray-700">{{ userReview.comment }}</p>
+      </div>
+      <p v-else-if="canReview" class="mt-2 text-gray-600">You haven't reviewed this product yet.</p>
+    </div>
+
+    <!-- Rating Modal -->
+    <div v-if="showRatingModal" class="fixed inset-0 z-50 overflow-y-auto">
+      <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity" @click="closeRatingModal"></div>
+        
+        <div class="relative bg-white rounded-lg max-w-md w-full mx-auto shadow-xl p-6 z-10">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-900">Rate this product</h3>
+            <button @click="closeRatingModal" class="text-gray-500 hover:text-gray-700">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="mb-6">
+            <p class="text-sm text-gray-600 mb-2">Select your rating:</p>
+            <div class="flex items-center justify-center space-x-1">
+              <button 
+                v-for="star in 5" 
+                :key="star" 
+                @click="userRating = star"
+                class="focus:outline-none">
+                <svg 
+                  class="w-8 h-8" 
+                  :class="star <= userRating ? 'text-yellow-400' : 'text-gray-300'" 
+                  fill="currentColor" 
+                  viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.97a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.357 2.44a1 1 0 00-.364 1.118l1.287 3.97c.3.921-.755 1.688-1.54 1.118l-3.357-2.44a1 1 0 00-1.175 0l-3.357 2.44c-.784.57-1.838-.197-1.54-1.118l1.287-3.97a1 1 0 00-.364-1.118L2.73 9.397c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.97z" />
+                </svg>
+              </button>
+            </div>
+            <p class="text-sm mt-2 text-gray-600">
+              {{ userRating ? ratingLabels[userRating - 1] : 'Select a rating' }}
+            </p>
+          </div>
+          
+          <div class="mb-6">
+            <label for="review-comment" class="block text-sm font-medium text-gray-700 mb-2">
+              Your review (optional)
+            </label>
+            <textarea
+              id="review-comment"
+              v-model="reviewComment"
+              rows="4"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Share your experience with this product"
+            ></textarea>
+          </div>
+          
+          <div class="flex justify-end">
+            <button 
+              @click="closeRatingModal" 
+              class="mr-3 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+              Cancel
+            </button>
+            <button 
+              @click="submitRating" 
+              :disabled="!userRating || isSubmitting"
+              class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
+              {{ isSubmitting ? 'Submitting...' : 'Submit' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Add ProductReview component -->
     <ProductReview :product-id="product.id" />
   </div>
@@ -189,7 +270,7 @@
 <script>
 import api from '../services/api';
 import formatPrice from '../utils/formatPrice';
-import ProductReview from '@/components/ProductReview.vue'
+import ProductReview from '@/components/ProductReview.vue';
 
 export default {
   name: 'ProductDetailPage',
@@ -202,47 +283,75 @@ export default {
       relatedProducts: [],
       reviews: [],
       averageRating: 0,
-      tabs: ['Description', 'Reviews', 'Related Products'],
+      tabs: ['Description', 'Related Products'],
       activeTab: 'Description',
-      quantity: 1
+      quantity: 1,
+      showRatingModal: false,
+      userRating: 0,
+      reviewComment: '',
+      isSubmitting: false,
+      ratingLabels: ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'],
+      canReview: false,
+      userReview: null,
+      hasUserReview: false,
+      isLoadingReviewStatus: true // Add loading state
     };
   },
   async created() {
     try {
+      // Fetch product details
       const response = await api.get(`/Product/get/${this.$route.params.id}`);
       this.product = response.data;
-      
+
+      // Check if route has query parameter to open rating modal
+      if (this.$route.query.openRatingModal) {
+        this.openRatingModal();
+      }
+
       // Fetch related products
       if (this.product?.categoryId) {
         try {
           const relatedRes = await api.get(`/Product/list`, {
             params: { categoryId: this.product.categoryId }
           });
-          console.log('Related products response:', relatedRes.data); // Debug log
-          
-          // Ensure we have an array of products
+          console.log('Related products response:', relatedRes.data);
+
           const products = Array.isArray(relatedRes.data) ? relatedRes.data : [];
-          
-          // Filter out current product and limit to 6
           this.relatedProducts = products
             .filter(p => p.id !== this.product.id)
             .slice(0, 6);
-            
-          console.log('Filtered related products:', this.relatedProducts); // Debug log
+          console.log('Filtered related products:', this.relatedProducts);
         } catch (error) {
           console.error('Error fetching related products:', error);
           this.relatedProducts = [];
         }
       }
-      
+
       // Fetch reviews
       const reviewsRes = await api.get(`/Review/list/${this.$route.params.id}`);
       this.reviews = reviewsRes.data || [];
       this.averageRating = this.reviews.length
         ? this.reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / this.reviews.length
         : 0;
+
+      // Check if user can review this product
+      await this.initReviewStatus();
     } catch (error) {
       console.error('Error fetching product details:', error);
+    } finally {
+      this.isLoadingReviewStatus = false;
+    }
+  },
+  watch: {
+    '$store.getters["user/isAuthenticated"]': async function(isAuthenticated) {
+      if (isAuthenticated && this.product) {
+        await this.initReviewStatus();
+      } else {
+        this.canReview = false;
+        this.hasUserReview = false;
+        this.userReview = null;
+        this.isLoadingReviewStatus = false;
+      }
     }
   },
   methods: {
@@ -278,6 +387,147 @@ export default {
           message: 'Failed to add product to cart'
         }, { root: true });
       }
+    },
+    openRatingModal() {
+      if (!this.$store.getters['user/isAuthenticated']) {
+        this.$store.dispatch('notification/showNotification', {
+          type: 'error',
+          message: 'Please log in to leave a review'
+        });
+        return;
+      }
+
+      if (this.hasUserReview && this.userReview) {
+        this.userRating = this.userReview.rating;
+        this.reviewComment = this.userReview.comment;
+      } else {
+        this.userRating = 0;
+        this.reviewComment = '';
+      }
+
+      this.showRatingModal = true;
+    },
+    closeRatingModal() {
+      this.showRatingModal = false;
+    },
+    async checkCanReview(productId) {
+      if (!productId) {
+        console.log('No productId provided');
+        return { canReview: false, hasReviewed: false, userReview: null };
+      }
+
+      try {
+        const token = this.$store.state.user.token;
+        console.log('Token:', token ? 'Present' : 'Missing');
+        if (!token) {
+          console.log('User not authenticated');
+          return { canReview: false, hasReviewed: false, userReview: null };
+        }
+
+        const response = await api.get(`/Review/can-review/${productId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('CanReview response:', response.data);
+        const canReview = response.data.CanReview || response.data.canReview; // Handle both casings
+
+        let hasReviewed = false;
+        let userReview = null;
+
+        if (canReview) {
+          const reviewResponse = await api.get(`/Review/has-reviewed/${productId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log('HasReviewed response:', reviewResponse.data);
+          hasReviewed = reviewResponse.data.HasReviewed || reviewResponse.data.hasReviewed;
+
+          if (hasReviewed) {
+            const userReviewResponse = await api.get(`/Review/user-review/${productId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            console.log('UserReview response:', userReviewResponse.data);
+            userReview = userReviewResponse.data;
+          }
+        }
+
+        return { canReview, hasReviewed, userReview };
+      } catch (error) {
+        console.error('Error checking review eligibility:', error);
+        if (error.response) {
+          console.error('Error response:', error.response.data, error.response.status);
+        }
+        return { canReview: false, hasReviewed: false, userReview: null };
+      }
+    },
+    async initReviewStatus() {
+      this.isLoadingReviewStatus = true;
+      try {
+        if (this.$store.getters['user/isAuthenticated'] && this.product) {
+          const reviewStatus = await this.checkCanReview(this.product.id);
+          console.log('Review status:', reviewStatus);
+          this.canReview = reviewStatus.canReview;
+          this.hasUserReview = reviewStatus.hasReviewed;
+          this.userReview = reviewStatus.userReview;
+        } else {
+          this.canReview = false;
+          this.hasUserReview = false;
+          this.userReview = null;
+        }
+      } catch (error) {
+        console.error('Error initializing review status:', error);
+        this.canReview = false;
+        this.hasUserReview = false;
+        this.userReview = null;
+      } finally {
+        this.isLoadingReviewStatus = false;
+      }
+    },
+    async submitRating() {
+      if (!this.userRating) return;
+
+      this.isSubmitting = true;
+
+      try {
+        const reviewData = {
+          productId: this.product.id,
+          rating: this.userRating,
+          comment: this.reviewComment
+        };
+
+        if (this.hasUserReview) {
+          await api.put(`/Review/update-review/${this.userReview.id}`, reviewData, {
+            headers: { Authorization: `Bearer ${this.$store.state.user.token}` }
+          });
+        } else {
+          await api.post('/Review/submit-review', reviewData, {
+            headers: { Authorization: `Bearer ${this.$store.state.user.token}` }
+          });
+        }
+
+        // Refresh reviews
+        const reviewsRes = await api.get(`/Review/list/${this.$route.params.id}`);
+        this.reviews = reviewsRes.data || [];
+        this.averageRating = this.reviews.length
+          ? this.reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / this.reviews.length
+          : 0;
+
+        // Refresh review status
+        await this.initReviewStatus();
+
+        this.$store.dispatch('notification/showNotification', {
+          type: 'success',
+          message: this.hasUserReview ? 'Review updated successfully' : 'Review submitted successfully'
+        });
+
+        this.closeRatingModal();
+      } catch (error) {
+        console.error('Error submitting review:', error);
+        this.$store.dispatch('notification/showNotification', {
+          type: 'error',
+          message: error.response?.data?.message || 'Failed to submit review'
+        });
+      } finally {
+        this.isSubmitting = false;
+      }
     }
   }
 };
@@ -293,7 +543,7 @@ export default {
   animation: spin 1s linear infinite;
 }
 @keyframes spin {
-  0% { transform: rotate(0deg);}
-  100% { transform: rotate(360deg);}
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>

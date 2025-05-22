@@ -13,8 +13,6 @@ namespace Demo.Models.ViewModel
         [Range(1, 5, ErrorMessage = "Diem danh gia phai tu 1 den 5")]
         public int Rating { get; set; }
         
-        [Required]
-        [StringLength(500, MinimumLength = 10, ErrorMessage = "Binh luan phai tu 10 den 500 ky tu")]
         public string Comment { get; set; }
         
         public DateTime CreatedAt { get; set; }
@@ -29,10 +27,7 @@ namespace Demo.Models.ViewModel
         [Required]
         [Range(1, 5, ErrorMessage = "Diem danh gia phai tu 1 den 5")]
         public int Rating { get; set; }
-        
-        [Required]
-        [StringLength(500, MinimumLength = 10, ErrorMessage = "Binh luan phai tu 10 den 500 ky tu")]
-        public string Comment { get; set; }
+        public string? Comment { get; set; }
     }
 
     public class UpdateReviewViewModel
@@ -41,8 +36,6 @@ namespace Demo.Models.ViewModel
         [Range(1, 5, ErrorMessage = "Diem danh gia phai tu 1 den 5")]
         public int Rating { get; set; }
         
-        [Required]
-        [StringLength(500, MinimumLength = 10, ErrorMessage = "Binh luan phai tu 10 den 500 ky tu")]
-        public string Comment { get; set; }
+        public string? Comment { get; set; }
     }
 } 

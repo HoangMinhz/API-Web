@@ -66,18 +66,29 @@ namespace Demo.Controllers
         {
             try
             {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                // Log the incoming model data
+                _logger.LogInformation("Creating review for product {ProductId}, Rating: {Rating}, Comment length: {CommentLength}", 
+                    model.ProductId, model.Rating, model.Comment?.Length ?? 0);
                 
-                // Check if user has purchased the product
-                var hasPurchased = await _context.OrderItems
-                    .AnyAsync(oi => oi.Order.UserId == userId && oi.ProductId == model.ProductId);
-
-                if (!hasPurchased)
+                if (!ModelState.IsValid)
                 {
-                    return BadRequest("You must purchase the product before reviewing it");
+                    _logger.LogWarning("Invalid model state when creating review for product {ProductId}", model.ProductId);
+                    return BadRequest(ModelState);
+                }
+
+                // Check if the product exists
+                var product = await _context.Products.FindAsync(model.ProductId);
+                if (product == null)
+                {
+                    _logger.LogWarning("Attempted to review non-existent product {ProductId}", model.ProductId);
+                    return BadRequest($"Product with ID {model.ProductId} does not exist");
+                }
+
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                if (userId == 0)
+                {
+                    _logger.LogWarning("Unable to get user ID from claims");
+                    return BadRequest("Unable to identify user");
                 }
 
                 // Check if user has already reviewed this product
@@ -86,7 +97,16 @@ namespace Demo.Controllers
 
                 if (existingReview != null)
                 {
+                    _logger.LogWarning("User {UserId} attempted to review product {ProductId} multiple times", userId, model.ProductId);
                     return BadRequest("You have already reviewed this product");
+                }
+
+                // Check if the user has purchased the product before reviewing
+                var canReview = await CanUserReviewProduct(userId, model.ProductId);
+                if (!canReview)
+                {
+                    _logger.LogWarning("User {UserId} attempted to review product {ProductId} without purchasing it", userId, model.ProductId);
+                    return BadRequest("You must purchase this product before reviewing it");
                 }
 
                 var review = new Review
@@ -94,40 +114,110 @@ namespace Demo.Controllers
                     ProductId = model.ProductId,
                     UserId = userId,
                     Rating = model.Rating,
-                    Comment = model.Comment,
+                    Comment = model.Comment ?? "", // Ensure comment is not null
                     CreatedAt = DateTime.UtcNow
                 };
 
                 _context.Reviews.Add(review);
 
                 // Update product rating
-                var product = await _context.Products.FindAsync(model.ProductId);
                 if (product != null)
                 {
+                    // First save the review to get its ID
+                    await _context.SaveChangesAsync();
+                    
+                    // Then update the product rating in a separate operation
                     product.ReviewCount++;
-                    product.Rating = (float)await _context.Reviews
+                    
+                    var averageRating = await _context.Reviews
                         .Where(r => r.ProductId == model.ProductId)
-                        .AverageAsync(r => r.Rating);
+                        .AverageAsync(r => (double?)r.Rating) ?? 0;
+                    
+                    product.Rating = (float)averageRating;
+                    
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    // If we somehow got here without a product, just save the review
+                    await _context.SaveChangesAsync();
                 }
 
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Created review {ReviewId} for product {ProductId}", review.Id, model.ProductId);
-                return CreatedAtAction(nameof(GetProductReviews), new { productId = model.ProductId }, new ReviewViewModel
-                {
-                    Id = review.Id,
-                    ProductId = review.ProductId,
-                    Rating = review.Rating,
-                    Comment = review.Comment,
-                    CreatedAt = review.CreatedAt,
-                    UserName = User.Identity.Name
-                });
+                _logger.LogInformation("Successfully created review {ReviewId} for product {ProductId}", review.Id, model.ProductId);
+                
+                return CreatedAtAction(nameof(GetProductReviews), 
+                    new { productId = model.ProductId }, 
+                    new ReviewViewModel
+                    {
+                        Id = review.Id,
+                        ProductId = review.ProductId,
+                        Rating = review.Rating,
+                        Comment = review.Comment,
+                        CreatedAt = review.CreatedAt,
+                        UserName = User.Identity?.Name ?? "Unknown"
+                    });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating review");
+                _logger.LogError(ex, "Error creating review for product {ProductId}: {ErrorMessage}", 
+                    model.ProductId, ex.Message);
+                
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError("Inner exception: {InnerException}", ex.InnerException.Message);
+                }
+                
                 return StatusCode(500, "An error occurred while creating the review");
             }
+        }
+
+        // Helper method to check if a user can review a product
+        private async Task<bool> CanUserReviewProduct(int userId, int productId)
+        {
+            try
+            {
+                // Check if the user has purchased the product and it's been delivered
+                var hasPurchased = await _context.OrderItems
+                    .Join(_context.Orders,
+                        od => od.OrderId,
+                        o => o.Id,
+                        (od, o) => new { od, o })
+                    .AnyAsync(x => x.od.ProductId == productId
+                                && x.o.UserId == userId
+                                && x.o.Status == OrderStatus.Delivered);
+
+                return hasPurchased;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking if user {UserId} can review product {ProductId}", userId, productId);
+                // If there's an error, we'll just allow the review to be more lenient
+                return true;
+            }
+        }
+
+        [Authorize]
+        [HttpGet("can-review/{productId}")]
+        public async Task<IActionResult> CanReview(int productId)
+        {
+            // Lấy UserId từ token
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("User not authenticated");
+            }
+
+            // Kiểm tra xem người dùng đã mua sản phẩm chưa
+            var hasPurchased = await _context.OrderItems
+                .Join(_context.Orders,
+                    od => od.OrderId,
+                    o => o.Id,
+                    (od, o) => new { od, o })
+                .AnyAsync(x => x.od.ProductId == productId
+                            && x.o.UserId == int.Parse(userId)
+                            && x.o.Status == OrderStatus.Delivered);
+
+            return Ok(new { CanReview = hasPurchased });
         }
 
         [Authorize]
@@ -237,4 +327,4 @@ namespace Demo.Controllers
             }
         }
     }
-} 
+}
