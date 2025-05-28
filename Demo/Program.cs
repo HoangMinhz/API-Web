@@ -11,7 +11,7 @@ using System.Reflection;
 using Demo.Models.Services;
 using Microsoft.AspNetCore.Diagnostics;
 using System.Security.Claims;
-
+using Demo.Models.Momo;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
@@ -77,7 +77,16 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
-
+// Register MoMo service with error handling
+try
+{
+    builder.Services.Configure<Demo.Models.Momo.MomoOptionModel>(builder.Configuration.GetSection("MomoAPI"));
+    builder.Services.AddScoped<Demo.Models.Momo.IMomoService, Demo.Models.Momo.MomoService>();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error registering MoMo service: {ex.Message}");
+}
 builder.Services.AddControllers();
     
 builder.Services.AddEndpointsApiExplorer();

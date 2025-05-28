@@ -2,14 +2,58 @@
   <div class="min-h-screen bg-gray-50 py-12">
     <div class="container mx-auto px-4">
       <div class="max-w-6xl mx-auto">
-        <div class="flex justify-between items-center mb-8">
+        <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-8 gap-4">
           <h1 class="text-3xl font-bold text-gray-900">My Orders</h1>
-          <router-link
-            to="/shop"
-            class="px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50"
-          >
-            Continue Shopping
-          </router-link>
+          <div class="flex flex-col sm:flex-row gap-4">
+            <!-- Status Filter -->
+            <div class="relative">
+              <select
+                v-model="selectedStatus"
+                @change="filterOrders"
+                class="appearance-none px-4 py-2 pr-8 rounded-lg bg-white text-gray-700 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">All Orders</option>
+                <option value="0">Pending</option>
+                <option value="1">Processing</option>
+                <option value="2">Shipped</option>
+                <option value="3">Delivered</option>
+                <option value="4">Cancelled</option>
+              </select>
+              <svg class="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+            <router-link
+              to="/shop"
+              class="px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50 text-center"
+            >
+              Continue Shopping
+            </router-link>
+          </div>
+        </div>
+
+        <!-- Order Statistics -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <div class="bg-white rounded-lg p-4 text-center border border-gray-200">
+            <div class="text-2xl font-bold text-gray-900">{{ getOrderCountByStatus('all') }}</div>
+            <div class="text-sm text-gray-500">Total Orders</div>
+          </div>
+          <div class="bg-white rounded-lg p-4 text-center border border-gray-200">
+            <div class="text-2xl font-bold text-yellow-600">{{ getOrderCountByStatus(0) }}</div>
+            <div class="text-sm text-gray-500">Pending</div>
+          </div>
+          <div class="bg-white rounded-lg p-4 text-center border border-gray-200">
+            <div class="text-2xl font-bold text-blue-600">{{ getOrderCountByStatus(1) }}</div>
+            <div class="text-sm text-gray-500">Processing</div>
+          </div>
+          <div class="bg-white rounded-lg p-4 text-center border border-gray-200">
+            <div class="text-2xl font-bold text-green-600">{{ getOrderCountByStatus(2) }}</div>
+            <div class="text-sm text-gray-500">Shipped</div>
+          </div>
+          <div class="bg-white rounded-lg p-4 text-center border border-gray-200">
+            <div class="text-2xl font-bold text-purple-600">{{ getOrderCountByStatus(3) }}</div>
+            <div class="text-sm text-gray-500">Delivered</div>
+          </div>
         </div>
 
         <!-- Loading State -->
@@ -41,7 +85,24 @@
 
         <!-- Orders List -->
         <div v-else class="space-y-6">
-          <div v-for="order in orders" :key="order.id" class="bg-white rounded-lg shadow-sm overflow-hidden">
+          <!-- No orders found for filter -->
+          <div v-if="!filteredOrders.length && selectedStatus !== 'all'" class="text-center py-12">
+            <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <h2 class="text-xl font-semibold text-gray-900 mb-2">No {{ getStatusText(selectedStatus) }} Orders</h2>
+            <p class="text-gray-600 mb-4">You don't have any orders with {{ getStatusText(selectedStatus).toLowerCase() }} status.</p>
+            <button
+              @click="selectedStatus = 'all'; filterOrders()"
+              class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              View All Orders
+            </button>
+          </div>
+          
+          <div v-for="order in filteredOrders" :key="order.id" class="bg-white rounded-lg shadow-sm overflow-hidden">
             <!-- Order Header -->
             <div class="p-6 border-b border-gray-200">
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -240,9 +301,11 @@ export default {
   data() {
     return {
       orders: [],
+      filteredOrders: [],
       loading: true,
       error: null,
-      expandedOrderId: null
+      expandedOrderId: null,
+      selectedStatus: 'all'
     };
   },
   async created() {
@@ -268,6 +331,7 @@ export default {
         const response = await api.get('/Order');
         console.log('Orders response:', response.data);
         this.orders = response.data;
+        this.filteredOrders = response.data; // Initialize filtered orders
       } catch (error) {
         console.error('Failed to fetch orders:', error);
         this.error = error.message || 'Failed to load orders. Please try again later.';
@@ -377,6 +441,9 @@ export default {
           this.orders[orderIndex].status = 4; // Set to cancelled status
         }
         
+        // Update filtered orders as well
+        this.filterOrders();
+        
         this.$toast.success('Order cancelled successfully');
       } catch (error) {
         console.error('Failed to cancel order:', error);
@@ -396,6 +463,21 @@ export default {
         console.error('Navigation error:', error);
         this.$toast.error('Could not open rating page. Please try again.');
       }
+    },
+    filterOrders() {
+      if (this.selectedStatus === 'all') {
+        this.filteredOrders = this.orders;
+      } else {
+        const statusValue = parseInt(this.selectedStatus);
+        this.filteredOrders = this.orders.filter(order => order.status === statusValue);
+      }
+    },
+    getOrderCountByStatus(status) {
+      if (status === 'all') {
+        return this.orders.length;
+      }
+      const statusValue = parseInt(status);
+      return this.orders.filter(order => order.status === statusValue).length;
     }
   }
 };

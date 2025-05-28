@@ -217,6 +217,18 @@
                       <span class="block text-xs text-gray-500">Pay via bank transfer</span>
                     </span>
                   </label>
+                  <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition">
+                    <input
+                      v-model="shippingInfo.paymentMethod"
+                      type="radio"
+                      value="momo"
+                      class="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span class="ml-3">
+                      <span class="block text-sm font-medium text-gray-900">MoMo E-Wallet</span>
+                      <span class="block text-xs text-gray-500">Pay with MoMo digital wallet</span>
+                    </span>
+                  </label>
                 </div>
               </div>
 
@@ -419,24 +431,30 @@ export default {
 
         const response = await api.post('/Order', orderData);
         
-        // Show success notification
-        this.showNotification({
-          type: 'success',
-          message: 'Order placed successfully!'
-        });
+        // Handle payment based on method
+        if (this.shippingInfo.paymentMethod === 'momo') {
+          // Process MoMo payment
+          await this.processMomoPayment(response.data.id, response.data.totalAmount || this.total);
+        } else {
+          // For COD and bank transfer, show success and redirect
+          this.showNotification({
+            type: 'success',
+            message: 'Order placed successfully!'
+          });
 
-        // Clear cart and redirect
-        await this.clearCart();
-        
-        // Redirect to order confirmation page
-        this.$router.push({ 
-          name: 'order-confirmation', 
-          params: { id: response.data.id },
-          query: { 
-            orderNumber: response.data.orderNumber,
-            total: response.data.totalAmount || this.total
-          }
-        });
+          // Clear cart and redirect
+          await this.clearCart();
+          
+          // Redirect to order confirmation page
+          this.$router.push({ 
+            name: 'order-confirmation', 
+            params: { id: response.data.id },
+            query: { 
+              orderNumber: response.data.orderNumber,
+              total: response.data.totalAmount || this.total
+            }
+          });
+        }
       } catch (error) {
         console.error('Failed to submit order:', error);
         const errorMessage = error.response?.data?.message || 'Failed to place order. Please try again.';
@@ -446,6 +464,33 @@ export default {
         });
       } finally {
         this.isSubmitting = false;
+      }
+    },
+    async processMomoPayment(orderId, amount) {
+      try {
+        const paymentData = {
+          orderId: orderId,
+          amount: amount,
+          orderInfo: `Thanh toán đơn hàng #${orderId}`
+        };
+
+        const response = await api.post('/Payment', paymentData);
+        
+        if (response.data.payUrl) {
+          // Clear cart before redirecting to payment
+          await this.clearCart();
+          
+          // Redirect to MoMo payment page
+          window.location.href = response.data.payUrl;
+        } else {
+          throw new Error(response.data.message || 'Failed to create payment URL');
+        }
+      } catch (error) {
+        console.error('Failed to process MoMo payment:', error);
+        this.showNotification({
+          type: 'error',
+          message: error.response?.data?.message || 'Failed to process payment. Please try again.'
+        });
       }
     }
   }

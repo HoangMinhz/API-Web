@@ -51,7 +51,6 @@ namespace Demo.Controllers
         /// <summary>
         /// Adds a product to the cart.
         /// </summary>
-        [Authorize]
         [HttpPost]
         public async Task<IActionResult> AddToCart([FromBody] CartItemModel model)
         {

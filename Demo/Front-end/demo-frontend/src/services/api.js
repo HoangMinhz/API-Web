@@ -14,33 +14,10 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   config => {
-    // List of public endpoints that don't require authentication
-    const publicEndpoints = [
-      '/Auth/login',
-      '/Auth/register',
-      '/Auth/confirm-email',
-      '/Product/get',
-      '/Product/list',
-      '/Category/get',
-      '/Category/list',
-      '/Review/get'
-    ];
-
-    // Check if the current request is to a public endpoint AND it's a GET request
-    const isPublicEndpoint = publicEndpoints.some(endpoint => 
-      config.url.includes(endpoint) && 
-      (config.method === 'get' || config.url.includes('/Auth/'))
-    );
-
-    if (!isPublicEndpoint) {
-      const token = store.state.user.token;
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      } else {
-        // If no token and trying to access protected route, redirect to login
-        router.push('/login');
-        return Promise.reject('No authentication token found');
-      }
+    // Always add token if available, but don't redirect if missing
+    const token = store.state.user.token;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
@@ -110,14 +87,22 @@ api.interceptors.response.use(
           }
           return Promise.reject(errorMessage || 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại thông tin.');
         
-        case 401:
-          if (!error.config.url.includes('/Auth/login') && 
+        case 401: {
+          // Only redirect to login for protected endpoints, not public ones
+          const protectedEndpoints = ['/Cart', '/Order', '/User', '/Review'];
+          const isProtectedEndpoint = protectedEndpoints.some(endpoint => 
+            error.config.url.includes(endpoint)
+          );
+          
+          if (isProtectedEndpoint && 
+              !error.config.url.includes('/Auth/login') && 
               !error.config.url.includes('/Auth/register') && 
               !error.config.url.includes('/Auth/confirm-email')) {
             store.dispatch('user/logout');
             router.push('/login');
           }
           return Promise.reject(errorMessage || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        }
         
         case 403:
           return Promise.reject(errorMessage || 'Bạn không có quyền thực hiện hành động này.');

@@ -211,13 +211,23 @@ export default {
     return {
       menuOpen: false,
       userMenuOpen: false,
-      searchQuery: '',
-      mainLinks: [
-        { to: '/', text: 'Home' },
-        { to: '/shop', text: 'Shop' },
-        { to: '/admin', text: 'Admin', show: () => this.$store.getters['user/isAdmin'] }
-      ].filter(link => !link.show || link.show())
+      searchQuery: ''
     };
+  },
+  computed: {
+    mainLinks() {
+      const links = [
+        { to: '/', text: 'Home' },
+        { to: '/shop', text: 'Shop' }
+      ];
+      
+      // Chỉ thêm tab Admin nếu user là admin
+      if (this.$store.getters['user/isAdmin']) {
+        links.push({ to: '/admin', text: 'Admin' });
+      }
+      
+      return links;
+    }
   },
   created() {
     // Initialize cart

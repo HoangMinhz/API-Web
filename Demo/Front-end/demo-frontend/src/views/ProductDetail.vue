@@ -84,7 +84,6 @@
 
           <button
             @click="addToCart"
-            :disabled="!$store.getters['user/isAuthenticated']"
             class="w-full bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -94,9 +93,6 @@
             </svg>
             Add to Cart
           </button>
-          <p v-if="!$store.getters['user/isAuthenticated']" class="text-xs text-red-500 mt-2">
-            Please log in to add items to your cart.
-          </p>
         </div>
       </div>
     </div>
@@ -172,7 +168,7 @@
         Please log in to leave a review.
       </p>
       <p v-else-if="!canReview" class="mt-2 text-sm text-amber-600">
-        You can write a review after purchasing this product.
+        You can write a review after purchasing and receiving this product.
       </p>
       <div v-else-if="hasUserReview && userReview" class="mt-4 bg-gray-50 rounded-lg p-4">
         <div class="flex items-center mb-2">
@@ -329,7 +325,17 @@ export default {
 
       // Fetch reviews
       const reviewsRes = await api.get(`/Review/list/${this.$route.params.id}`);
-      this.reviews = reviewsRes.data || [];
+      console.log('Reviews response:', reviewsRes.data);
+      
+      // Handle both array response and paginated response
+      if (Array.isArray(reviewsRes.data)) {
+        this.reviews = reviewsRes.data;
+      } else if (reviewsRes.data && (reviewsRes.data.reviews || reviewsRes.data.Reviews)) {
+        this.reviews = reviewsRes.data.reviews || reviewsRes.data.Reviews;
+      } else {
+        this.reviews = [];
+      }
+      
       this.averageRating = this.reviews.length
         ? this.reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / this.reviews.length
         : 0;
@@ -367,14 +373,6 @@ export default {
       }
     },
     async addToCart() {
-      if (!this.$store.getters['user/isAuthenticated']) {
-        this.$store.dispatch('notification/showNotification', {
-          type: 'error',
-          message: 'Please log in to add items to cart'
-        }, { root: true });
-        return;
-      }
-
       try {
         await this.$store.dispatch('cart/addToCart', { 
           productId: this.product.id, 
@@ -424,28 +422,29 @@ export default {
           return { canReview: false, hasReviewed: false, userReview: null };
         }
 
-        const response = await api.get(`/Review/can-review/${productId}`, {
+        // Kiểm tra xem user có thể đánh giá không
+        const canReviewResponse = await api.get(`/Review/can-review/${productId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        console.log('CanReview response:', response.data);
-        const canReview = response.data.CanReview || response.data.canReview; // Handle both casings
+        console.log('CanReview response:', canReviewResponse.data);
+        const canReview = canReviewResponse.data.CanReview || canReviewResponse.data.canReview;
 
         let hasReviewed = false;
         let userReview = null;
 
         if (canReview) {
-          const reviewResponse = await api.get(`/Review/has-reviewed/${productId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          console.log('HasReviewed response:', reviewResponse.data);
-          hasReviewed = reviewResponse.data.HasReviewed || reviewResponse.data.hasReviewed;
-
-          if (hasReviewed) {
+          try {
+            // Kiểm tra xem user đã có review chưa
             const userReviewResponse = await api.get(`/Review/user-review/${productId}`, {
               headers: { Authorization: `Bearer ${token}` }
             });
             console.log('UserReview response:', userReviewResponse.data);
             userReview = userReviewResponse.data;
+            hasReviewed = true;
+          } catch {
+            console.log('User has not reviewed this product yet');
+            hasReviewed = false;
+            userReview = null;
           }
         }
 
@@ -493,8 +492,11 @@ export default {
           comment: this.reviewComment
         };
 
-        if (this.hasUserReview) {
-          await api.put(`/Review/update-review/${this.userReview.id}`, reviewData, {
+        if (this.hasUserReview && this.userReview) {
+          await api.put(`/Review/update-review/${this.userReview.id}`, {
+            rating: this.userRating,
+            comment: this.reviewComment
+          }, {
             headers: { Authorization: `Bearer ${this.$store.state.user.token}` }
           });
         } else {
@@ -505,7 +507,16 @@ export default {
 
         // Refresh reviews
         const reviewsRes = await api.get(`/Review/list/${this.$route.params.id}`);
-        this.reviews = reviewsRes.data || [];
+        
+        // Handle both array response and paginated response
+        if (Array.isArray(reviewsRes.data)) {
+          this.reviews = reviewsRes.data;
+        } else if (reviewsRes.data && (reviewsRes.data.reviews || reviewsRes.data.Reviews)) {
+          this.reviews = reviewsRes.data.reviews || reviewsRes.data.Reviews;
+        } else {
+          this.reviews = [];
+        }
+        
         this.averageRating = this.reviews.length
           ? this.reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / this.reviews.length
           : 0;

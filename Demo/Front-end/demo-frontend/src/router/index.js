@@ -15,7 +15,9 @@ import Wishlist from '../views/Wishlist.vue';
 import Orders from '../views/Orders.vue';
 import Profile from '../views/Profile.vue';
 import ConfirmEmail from '../views/ConfirmEmail.vue';
-import OrdersManagement from '@/views/admin/OrdersManagement.vue'
+import OrdersManagement from '@/views/admin/OrdersManagement.vue';
+import PaymentSuccess from '../views/PaymentSuccess.vue';
+import PaymentFailed from '../views/PaymentFailed.vue';
 
 const routes = [
   { path: '/', component: Home },
@@ -84,6 +86,16 @@ const routes = [
       requiresAuth: true,
       requiresAdmin: true
     }
+  },
+  {
+    path: '/payment/success',
+    name: 'PaymentSuccess',
+    component: PaymentSuccess
+  },
+  {
+    path: '/payment/failed',
+    name: 'PaymentFailed',
+    component: PaymentFailed
   }
 ];
 

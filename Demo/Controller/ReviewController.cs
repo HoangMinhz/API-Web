@@ -21,6 +21,7 @@ namespace Demo.Controllers
             _logger = logger;
         }
 
+        // GET: api/Review/product/{productId} - Lấy tất cả reviews của sản phẩm (public)
         [HttpGet("product/{productId}")]
         public async Task<IActionResult> GetProductReviews(int productId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
@@ -60,270 +61,294 @@ namespace Demo.Controllers
             }
         }
 
+        // GET: api/Review/list/{productId} - Alias cho GetProductReviews
+        [HttpGet("list/{productId}")]
+        public async Task<IActionResult> GetReviewsList(int productId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            return await GetProductReviews(productId, page, pageSize);
+        }
+
+        // GET: api/Review/can-review/{productId} - Kiểm tra user có thể đánh giá không
         [Authorize]
-        [HttpPost]
-        public async Task<IActionResult> CreateReview([FromBody] CreateReviewViewModel model)
+        [HttpGet("can-review/{productId}")]
+        public async Task<IActionResult> CanReview(int productId)
         {
             try
             {
-                // Log the incoming model data
-                _logger.LogInformation("Creating review for product {ProductId}, Rating: {Rating}, Comment length: {CommentLength}", 
-                    model.ProductId, model.Rating, model.Comment?.Length ?? 0);
+                var userId = GetCurrentUserId();
+                if (userId == 0)
+                {
+                    return Unauthorized("User not authenticated");
+                }
+
+                _logger.LogInformation("Checking review eligibility for User {UserId} and Product {ProductId}", userId, productId);
+
+                // Kiểm tra user đã mua sản phẩm và đơn hàng đã delivered
+                var hasPurchasedAndDelivered = await _context.OrderItems
+                    .Join(_context.Orders,
+                        oi => oi.OrderId,
+                        o => o.Id,
+                        (oi, o) => new { oi, o })
+                    .AnyAsync(x => x.oi.ProductId == productId 
+                                && x.o.UserId == userId 
+                                && x.o.Status == OrderStatus.Delivered);
+
+                _logger.LogInformation("User {UserId} can review product {ProductId}: {CanReview}", userId, productId, hasPurchasedAndDelivered);
                 
+                return Ok(new { CanReview = hasPurchasedAndDelivered });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking review eligibility for product {ProductId}", productId);
+                return StatusCode(500, "An error occurred while checking review eligibility");
+            }
+        }
+
+        // GET: api/Review/user-review/{productId} - Lấy review của user hiện tại cho sản phẩm
+        [Authorize]
+        [HttpGet("user-review/{productId}")]
+        public async Task<IActionResult> GetUserReview(int productId)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                if (userId == 0)
+                {
+                    return Unauthorized("User not authenticated");
+                }
+
+                var userReview = await _context.Reviews
+                    .Include(r => r.User)
+                    .Where(r => r.UserId == userId && r.ProductId == productId)
+                    .Select(r => new ReviewViewModel
+                    {
+                        Id = r.Id,
+                        ProductId = r.ProductId,
+                        Rating = r.Rating,
+                        Comment = r.Comment,
+                        CreatedAt = r.CreatedAt,
+                        UserName = r.User.UserName
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (userReview == null)
+                {
+                    return NotFound("User has not reviewed this product");
+                }
+
+                return Ok(userReview);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting user review for product {ProductId}", productId);
+                return StatusCode(500, "An error occurred while retrieving user review");
+            }
+        }
+
+        // POST: api/Review/submit-review - Tạo review mới
+        [Authorize]
+        [HttpPost("submit-review")]
+        public async Task<IActionResult> SubmitReview([FromBody] CreateReviewViewModel model)
+        {
+            try
+            {
                 if (!ModelState.IsValid)
                 {
-                    _logger.LogWarning("Invalid model state when creating review for product {ProductId}", model.ProductId);
                     return BadRequest(ModelState);
                 }
 
-                // Check if the product exists
+                var userId = GetCurrentUserId();
+                if (userId == 0)
+                {
+                    return Unauthorized("User not authenticated");
+                }
+
+                // Kiểm tra sản phẩm có tồn tại
                 var product = await _context.Products.FindAsync(model.ProductId);
                 if (product == null)
                 {
-                    _logger.LogWarning("Attempted to review non-existent product {ProductId}", model.ProductId);
-                    return BadRequest($"Product with ID {model.ProductId} does not exist");
+                    return BadRequest("Product not found");
                 }
 
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-                if (userId == 0)
+                // Kiểm tra user đã mua sản phẩm và delivered chưa
+                var canReview = await _context.OrderItems
+                    .Join(_context.Orders,
+                        oi => oi.OrderId,
+                        o => o.Id,
+                        (oi, o) => new { oi, o })
+                    .AnyAsync(x => x.oi.ProductId == model.ProductId 
+                                && x.o.UserId == userId 
+                                && x.o.Status == OrderStatus.Delivered);
+
+                if (!canReview)
                 {
-                    _logger.LogWarning("Unable to get user ID from claims");
-                    return BadRequest("Unable to identify user");
+                    return BadRequest("You must purchase and receive this product before reviewing it");
                 }
 
-                // Check if user has already reviewed this product
+                // Kiểm tra user đã review chưa
                 var existingReview = await _context.Reviews
                     .FirstOrDefaultAsync(r => r.UserId == userId && r.ProductId == model.ProductId);
 
                 if (existingReview != null)
                 {
-                    _logger.LogWarning("User {UserId} attempted to review product {ProductId} multiple times", userId, model.ProductId);
                     return BadRequest("You have already reviewed this product");
                 }
 
-                // Check if the user has purchased the product before reviewing
-                var canReview = await CanUserReviewProduct(userId, model.ProductId);
-                if (!canReview)
-                {
-                    _logger.LogWarning("User {UserId} attempted to review product {ProductId} without purchasing it", userId, model.ProductId);
-                    return BadRequest("You must purchase this product before reviewing it");
-                }
-
+                // Tạo review mới
                 var review = new Review
                 {
                     ProductId = model.ProductId,
                     UserId = userId,
                     Rating = model.Rating,
-                    Comment = model.Comment ?? "", // Ensure comment is not null
+                    Comment = model.Comment ?? "",
                     CreatedAt = DateTime.UtcNow
                 };
 
                 _context.Reviews.Add(review);
+                await _context.SaveChangesAsync();
 
-                // Update product rating
-                if (product != null)
-                {
-                    // First save the review to get its ID
-                    await _context.SaveChangesAsync();
-                    
-                    // Then update the product rating in a separate operation
-                    product.ReviewCount++;
-                    
-                    var averageRating = await _context.Reviews
-                        .Where(r => r.ProductId == model.ProductId)
-                        .AverageAsync(r => (double?)r.Rating) ?? 0;
-                    
-                    product.Rating = (float)averageRating;
-                    
-                    await _context.SaveChangesAsync();
-                }
-                else
-                {
-                    // If we somehow got here without a product, just save the review
-                    await _context.SaveChangesAsync();
-                }
+                // Cập nhật rating của sản phẩm
+                await UpdateProductRating(model.ProductId);
 
-                _logger.LogInformation("Successfully created review {ReviewId} for product {ProductId}", review.Id, model.ProductId);
-                
-                return CreatedAtAction(nameof(GetProductReviews), 
-                    new { productId = model.ProductId }, 
-                    new ReviewViewModel
-                    {
-                        Id = review.Id,
-                        ProductId = review.ProductId,
-                        Rating = review.Rating,
-                        Comment = review.Comment,
-                        CreatedAt = review.CreatedAt,
-                        UserName = User.Identity?.Name ?? "Unknown"
-                    });
+                _logger.LogInformation("User {UserId} successfully created review for product {ProductId}", userId, model.ProductId);
+
+                return Ok(new { Message = "Review submitted successfully", ReviewId = review.Id });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating review for product {ProductId}: {ErrorMessage}", 
-                    model.ProductId, ex.Message);
-                
-                if (ex.InnerException != null)
-                {
-                    _logger.LogError("Inner exception: {InnerException}", ex.InnerException.Message);
-                }
-                
-                return StatusCode(500, "An error occurred while creating the review");
+                _logger.LogError(ex, "Error submitting review for product {ProductId}", model.ProductId);
+                return StatusCode(500, "An error occurred while submitting the review");
             }
         }
 
-        // Helper method to check if a user can review a product
-        private async Task<bool> CanUserReviewProduct(int userId, int productId)
-        {
-            try
-            {
-                // Check if the user has purchased the product and it's been delivered
-                var hasPurchased = await _context.OrderItems
-                    .Join(_context.Orders,
-                        od => od.OrderId,
-                        o => o.Id,
-                        (od, o) => new { od, o })
-                    .AnyAsync(x => x.od.ProductId == productId
-                                && x.o.UserId == userId
-                                && x.o.Status == OrderStatus.Delivered);
-
-                return hasPurchased;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error checking if user {UserId} can review product {ProductId}", userId, productId);
-                // If there's an error, we'll just allow the review to be more lenient
-                return true;
-            }
-        }
-
+        // PUT: api/Review/update-review/{reviewId} - Cập nhật review
         [Authorize]
-        [HttpGet("can-review/{productId}")]
-        public async Task<IActionResult> CanReview(int productId)
-        {
-            // Lấy UserId từ token
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
-            {
-                return Unauthorized("User not authenticated");
-            }
-
-            // Kiểm tra xem người dùng đã mua sản phẩm chưa
-            var hasPurchased = await _context.OrderItems
-                .Join(_context.Orders,
-                    od => od.OrderId,
-                    o => o.Id,
-                    (od, o) => new { od, o })
-                .AnyAsync(x => x.od.ProductId == productId
-                            && x.o.UserId == int.Parse(userId)
-                            && x.o.Status == OrderStatus.Delivered);
-
-            return Ok(new { CanReview = hasPurchased });
-        }
-
-        [Authorize]
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateReview(int id, [FromBody] UpdateReviewViewModel model)
+        [HttpPut("update-review/{reviewId}")]
+        public async Task<IActionResult> UpdateReview(int reviewId, [FromBody] UpdateReviewViewModel model)
         {
             try
             {
                 if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                var review = await _context.Reviews
-                    .Include(r => r.User)
-                    .FirstOrDefaultAsync(r => r.Id == id);
-
-                if (review == null)
                 {
-                    return NotFound();
+                    return BadRequest(ModelState);
                 }
 
+                var userId = GetCurrentUserId();
+                if (userId == 0)
+                {
+                    return Unauthorized("User not authenticated");
+                }
+
+                var review = await _context.Reviews.FindAsync(reviewId);
+                if (review == null)
+                {
+                    return NotFound("Review not found");
+                }
+
+                // Chỉ cho phép user sửa review của chính mình
                 if (review.UserId != userId)
                 {
-                    return Forbid();
+                    return Forbid("You can only edit your own reviews");
                 }
 
                 review.Rating = model.Rating;
-                review.Comment = model.Comment;
-
-                // Update product rating
-                var product = await _context.Products.FindAsync(review.ProductId);
-                if (product != null)
-                {
-                    product.Rating = (float)await _context.Reviews
-                        .Where(r => r.ProductId == review.ProductId)
-                        .AverageAsync(r => r.Rating);
-                }
+                review.Comment = model.Comment ?? "";
 
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Updated review {ReviewId}", id);
-                return Ok(new ReviewViewModel
-                {
-                    Id = review.Id,
-                    ProductId = review.ProductId,
-                    Rating = review.Rating,
-                    Comment = review.Comment,
-                    CreatedAt = review.CreatedAt,
-                    UserName = review.User.UserName
-                });
+                // Cập nhật rating của sản phẩm
+                await UpdateProductRating(review.ProductId);
+
+                _logger.LogInformation("User {UserId} successfully updated review {ReviewId}", userId, reviewId);
+
+                return Ok(new { Message = "Review updated successfully" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating review {ReviewId}", id);
+                _logger.LogError(ex, "Error updating review {ReviewId}", reviewId);
                 return StatusCode(500, "An error occurred while updating the review");
             }
         }
 
+        // DELETE: api/Review/delete-review/{reviewId} - Xóa review
         [Authorize]
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteReview(int id)
+        [HttpDelete("delete-review/{reviewId}")]
+        public async Task<IActionResult> DeleteReview(int reviewId)
         {
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                var review = await _context.Reviews.FindAsync(id);
-
-                if (review == null)
+                var userId = GetCurrentUserId();
+                if (userId == 0)
                 {
-                    return NotFound();
+                    return Unauthorized("User not authenticated");
                 }
 
-                if (review.UserId != userId && !User.IsInRole("Admin"))
+                var review = await _context.Reviews.FindAsync(reviewId);
+                if (review == null)
                 {
-                    return Forbid();
+                    return NotFound("Review not found");
+                }
+
+                // Chỉ cho phép user xóa review của chính mình hoặc admin
+                var isAdmin = User.IsInRole("Admin");
+                if (review.UserId != userId && !isAdmin)
+                {
+                    return Forbid("You can only delete your own reviews");
                 }
 
                 var productId = review.ProductId;
                 _context.Reviews.Remove(review);
+                await _context.SaveChangesAsync();
 
-                // Update product rating
+                // Cập nhật rating của sản phẩm
+                await UpdateProductRating(productId);
+
+                _logger.LogInformation("User {UserId} successfully deleted review {ReviewId}", userId, reviewId);
+
+                return Ok(new { Message = "Review deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting review {ReviewId}", reviewId);
+                return StatusCode(500, "An error occurred while deleting the review");
+            }
+        }
+
+        // Helper methods
+        private int GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(userIdClaim, out var userId) ? userId : 0;
+        }
+
+        private async Task UpdateProductRating(int productId)
+        {
+            try
+            {
                 var product = await _context.Products.FindAsync(productId);
                 if (product != null)
                 {
-                    product.ReviewCount--;
-                    if (product.ReviewCount > 0)
+                    var reviews = await _context.Reviews
+                        .Where(r => r.ProductId == productId)
+                        .ToListAsync();
+
+                    if (reviews.Any())
                     {
-                        product.Rating = (float)await _context.Reviews
-                            .Where(r => r.ProductId == productId)
-                            .AverageAsync(r => r.Rating);
+                        product.Rating = (float)reviews.Average(r => r.Rating);
+                        product.ReviewCount = reviews.Count;
                     }
                     else
                     {
                         product.Rating = 0;
+                        product.ReviewCount = 0;
                     }
+
+                    await _context.SaveChangesAsync();
                 }
-
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Deleted review {ReviewId}", id);
-                return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting review {ReviewId}", id);
-                return StatusCode(500, "An error occurred while deleting the review");
+                _logger.LogError(ex, "Error updating product rating for product {ProductId}", productId);
             }
         }
     }

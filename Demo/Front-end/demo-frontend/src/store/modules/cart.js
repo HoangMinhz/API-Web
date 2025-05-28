@@ -44,7 +44,7 @@ export default {
           // Fetch product details for each item in the cart
           const itemsWithProducts = await Promise.all(localCart.map(async (item) => {
             try {
-              const response = await api.get(`/Product/${item.productId}`);
+              const response = await api.get(`/Product/get/${item.productId}`);
               return {
                 ...item,
                 product: response.data
@@ -86,7 +86,22 @@ export default {
           }
           
           localStorage.setItem('cart', JSON.stringify(localCart));
-          commit('setItems', localCart);
+          
+          // Fetch product details for all items in cart
+          const itemsWithProducts = await Promise.all(localCart.map(async (item) => {
+            try {
+              const response = await api.get(`/Product/get/${item.productId}`);
+              return {
+                ...item,
+                product: response.data
+              };
+            } catch (error) {
+              console.error(`Failed to fetch product ${item.productId}:`, error);
+              return item;
+            }
+          }));
+          
+          commit('setItems', itemsWithProducts);
           dispatch('notification/showNotification', {
             type: 'success',
             message: 'Item added to cart!'
@@ -128,7 +143,7 @@ export default {
           
           if (item) {
             // Check product stock
-            const productResponse = await api.get(`/Product/${productId}`);
+            const productResponse = await api.get(`/Product/get/${productId}`);
             const product = productResponse.data;
             
             if (quantity > product.stock) {
@@ -141,7 +156,7 @@ export default {
             // Fetch updated product details
             const itemsWithProducts = await Promise.all(localCart.map(async (item) => {
               try {
-                const response = await api.get(`/Product/${item.productId}`);
+                const response = await api.get(`/Product/get/${item.productId}`);
                 return {
                   ...item,
                   product: response.data
@@ -162,7 +177,7 @@ export default {
         }
 
         // For authenticated users, check stock before updating
-        const productResponse = await api.get(`/Product/${productId}`);
+        const productResponse = await api.get(`/Product/get/${productId}`);
         const product = productResponse.data;
         
         if (quantity > product.stock) {
@@ -201,7 +216,7 @@ export default {
           // Fetch updated product details
           const itemsWithProducts = await Promise.all(updatedCart.map(async (item) => {
             try {
-              const response = await api.get(`/Product/${item.productId}`);
+              const response = await api.get(`/Product/get/${item.productId}`);
               return {
                 ...item,
                 product: response.data

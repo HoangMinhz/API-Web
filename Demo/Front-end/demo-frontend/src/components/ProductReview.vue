@@ -82,7 +82,13 @@
           </div>
           <p class="reviewer-name">{{ review.userName }}</p>
           <p class="review-comment">{{ review.comment }}</p>
+          
+          <div v-if="isCurrentUserReview(review)" class="review-actions">
+            <button class="btn btn-sm btn-outline-primary" @click="editUserReview(review)">Edit</button>
+            <button class="btn btn-sm btn-outline-danger" @click="deleteUserReview(review.id)">Delete</button>
+          </div>
         </div>
+        
         <div class="pagination" v-if="totalPages > 1">
           <button class="btn btn-outline-primary" 
                   :disabled="currentPage === 1"
@@ -109,14 +115,14 @@
             <div class="stars-input">
               <i v-for="n in 5" :key="n" 
                  class="fas fa-star" 
-                 :class="{ 'active': n <= editReview.rating }"
-                 @click="editReview.rating = n"></i>
+                 :class="{ 'active': n <= editingReview.rating }"
+                 @click="editingReview.rating = n"></i>
             </div>
           </div>
           <div class="form-group">
             <label for="edit-comment">Your Review:</label>
             <textarea id="edit-comment" 
-                      v-model="editReview.comment" 
+                      v-model="editingReview.comment" 
                       :class="{ 'is-invalid': errors.comment }"
                       rows="4"></textarea>
             <div class="invalid-feedback" v-if="errors.comment">{{ errors.comment }}</div>
@@ -162,7 +168,7 @@ export default {
       comment: ''
     })
 
-    const editReview = ref({
+    const editingReview = ref({
       id: null,
       rating: 0,
       comment: ''
@@ -218,13 +224,13 @@ export default {
 
     const updateReview = async () => {
       errors.value = {}
-      if (!validateReview(editReview.value)) return
+      if (!validateReview(editingReview.value)) return
 
       isSubmitting.value = true
       try {
-        await axios.put(`/api/review/${editReview.value.id}`, {
-          rating: editReview.value.rating,
-          comment: editReview.value.comment
+        await axios.put(`/api/review/${editingReview.value.id}`, {
+          rating: editingReview.value.rating,
+          comment: editingReview.value.comment
         })
         await fetchReviews(currentPage.value)
         showEditModal.value = false
@@ -238,11 +244,11 @@ export default {
       }
     }
 
-    const deleteReview = async () => {
+    const deleteReview = async (reviewId) => {
       if (!confirm('Are you sure you want to delete your review?')) return
 
       try {
-        await axios.delete(`/api/review/${userReview.value.id}`)
+        await axios.delete(`/api/review/${reviewId}`)
         await fetchReviews(currentPage.value)
       } catch (error) {
         console.error('Error deleting review:', error)
@@ -281,6 +287,39 @@ export default {
       return (getRatingCount(rating) / totalReviews.value) * 100
     }
 
+    const isCurrentUserReview = (review) => {
+      return userReview.value && review.userName === userReview.value.userName
+    }
+
+    const editReview = (review) => {
+      editingReview.value = {
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment
+      }
+      showEditModal.value = true
+    }
+
+    const editUserReview = (review) => {
+      editingReview.value = {
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment
+      }
+      showEditModal.value = true
+    }
+
+    const deleteUserReview = async (reviewId) => {
+      if (!confirm('Are you sure you want to delete your review?')) return
+
+      try {
+        await axios.delete(`/api/review/${reviewId}`)
+        await fetchReviews(currentPage.value)
+      } catch (error) {
+        console.error('Error deleting review:', error)
+      }
+    }
+
     onMounted(() => {
       fetchReviews()
     })
@@ -296,7 +335,7 @@ export default {
       errors,
       hoverRating,
       newReview,
-      editReview,
+      editingReview,
       userReview,
       isAuthenticated,
       hasPurchased,
@@ -306,7 +345,11 @@ export default {
       changePage,
       formatDate,
       getRatingCount,
-      getRatingPercentage
+      getRatingPercentage,
+      isCurrentUserReview,
+      editReview,
+      editUserReview,
+      deleteUserReview
     }
   }
 }
