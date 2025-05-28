@@ -162,9 +162,17 @@
               <div class="flex items-center justify-between">
               <div class="text-sm text-gray-500">
                 <p>{{ order.orderItems.length }} items</p>
+                <p v-if="order.voucherCode" class="text-green-600 font-medium">
+                  🎫 Voucher: {{ order.voucherCode }}
+                </p>
               </div>
               <div class="flex items-center space-x-4">
-                <p class="text-lg font-semibold text-gray-900">Total: {{ formatPrice(order.totalAmount) }}</p>
+                <div class="text-right">
+                  <p v-if="order.discountAmount > 0" class="text-sm text-green-600">
+                    Saved: {{ formatPrice(order.discountAmount) }}
+                  </p>
+                  <p class="text-lg font-semibold text-gray-900">Total: {{ formatPrice(order.totalAmount) }}</p>
+                </div>
                 <button
                 @click="toggleOrderDetails(order.id)"
                 class="px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50"
@@ -281,6 +289,32 @@
                     <p class="text-sm text-gray-900">{{ order.notes }}</p>
                   </div>
                 </div>
+
+                <!-- Order Summary -->
+                <div class="bg-white rounded-lg border border-gray-200 p-4">
+                  <h4 class="text-sm font-medium text-gray-900 mb-4">Order Summary</h4>
+                  <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">Subtotal</span>
+                      <span class="text-gray-900">{{ formatPrice(getOrderSubtotal(order)) }}</span>
+                    </div>
+                    <div v-if="order.voucherCode && order.discountAmount > 0" class="flex justify-between text-sm text-green-600">
+                      <span>Voucher Discount ({{ order.voucherCode }})</span>
+                      <span>-{{ formatPrice(order.discountAmount) }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">Tax (10%)</span>
+                      <span class="text-gray-900">{{ formatPrice(getOrderTax(order)) }}</span>
+                    </div>
+                    <div class="flex justify-between text-base font-semibold pt-2 border-t border-gray-200">
+                      <span class="text-gray-900">Total</span>
+                      <span class="text-blue-600">{{ formatPrice(order.totalAmount) }}</span>
+                    </div>
+                    <div v-if="order.discountAmount > 0" class="text-sm text-green-600 text-center pt-2">
+                      🎉 You saved {{ formatPrice(order.discountAmount) }} with voucher {{ order.voucherCode }}!
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -295,6 +329,7 @@ import api from '../services/api';
 import formatPrice from '../utils/formatPrice';
 import store from '../store';
 import router from '../router';
+import { useGlobalSignalR } from '@/composables/useSignalR'
 
 export default {
   name: 'OrdersPage',
@@ -308,8 +343,70 @@ export default {
       selectedStatus: 'all'
     };
   },
+  setup() {
+    // SignalR integration - only for real-time UI updates
+    const {
+      connectionStatus
+    } = useGlobalSignalR()
+
+    return {
+      connectionStatus
+    }
+  },
   async created() {
     await this.fetchOrders();
+  },
+  mounted() {
+    // Listen for SignalR events to update order status in UI
+    window.addEventListener('signalr-order-status-changed', (event) => {
+      const data = event.detail
+      console.log('📱 Updating order status in UI:', data)
+      
+      // Update order in local state
+      const orderIndex = this.orders.findIndex(order => order.id === data.OrderId)
+      if (orderIndex !== -1) {
+        // Convert status string to number
+        const statusMap = {
+          'Pending': 0,
+          'Processing': 1,
+          'Shipped': 2,
+          'Delivered': 3,
+          'Cancelled': 4
+        }
+        this.orders[orderIndex].status = statusMap[data.NewStatus] || data.NewStatus
+        this.filterOrders() // Refresh filtered orders
+        console.log(`✅ Updated order ${data.OrderId} status to ${data.NewStatus}`)
+      }
+    })
+
+    window.addEventListener('signalr-order-cancelled', (event) => {
+      const data = event.detail
+      console.log('📱 Updating cancelled order in UI:', data)
+      
+      // Update order in local state
+      const orderIndex = this.orders.findIndex(order => order.id === data.OrderId)
+      if (orderIndex !== -1) {
+        this.orders[orderIndex].status = 4 // Cancelled
+        this.filterOrders()
+        console.log(`✅ Updated order ${data.OrderId} to cancelled`)
+      }
+    })
+
+    window.addEventListener('signalr-new-order-created', (event) => {
+      const data = event.detail
+      console.log('📱 New order created, refreshing list:', data)
+      
+      // Refresh orders list
+      this.fetchOrders()
+    })
+  },
+  beforeUnmount() {
+    // Clean up event listeners
+    if (this._signalrListeners) {
+      window.removeEventListener('signalr-order-status-changed', this._signalrListeners.handleOrderStatusChanged)
+      window.removeEventListener('signalr-order-cancelled', this._signalrListeners.handleOrderCancelled)
+      window.removeEventListener('signalr-new-order-created', this._signalrListeners.handleNewOrderCreated)
+    }
   },
   methods: {
     formatPrice,
@@ -443,11 +540,9 @@ export default {
         
         // Update filtered orders as well
         this.filterOrders();
-        
-        this.$toast.success('Order cancelled successfully');
       } catch (error) {
         console.error('Failed to cancel order:', error);
-        this.$toast.error(error.response?.data?.message || 'Failed to cancel order. Please try again.');
+        alert(error.response?.data?.message || 'Failed to cancel order. Please try again.');
       } finally {
         this.loading = false;
       }
@@ -461,7 +556,7 @@ export default {
         });
       } catch (error) {
         console.error('Navigation error:', error);
-        this.$toast.error('Could not open rating page. Please try again.');
+        alert('Could not open rating page. Please try again.');
       }
     },
     filterOrders() {
@@ -478,6 +573,29 @@ export default {
       }
       const statusValue = parseInt(status);
       return this.orders.filter(order => order.status === statusValue).length;
+    },
+    getOrderSubtotal(order) {
+      return order.orderItems.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
+    },
+    getOrderTax(order) {
+      return this.getOrderSubtotal(order) * 0.1;
+    },
+    formatTimestamp(timestamp) {
+      const date = new Date(timestamp)
+      const now = new Date()
+      const diffInMinutes = Math.floor((now - date) / (1000 * 60))
+      
+      if (diffInMinutes < 1) {
+        return 'Just now'
+      } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m ago`
+      } else if (diffInMinutes < 1440) {
+        const hours = Math.floor(diffInMinutes / 60)
+        return `${hours}h ago`
+      } else {
+        const days = Math.floor(diffInMinutes / 1440)
+        return `${days}d ago`
+      }
     }
   }
 };

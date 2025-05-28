@@ -338,35 +338,32 @@ namespace Demo.Controllers
                 if (user == null)
                 {
                     _logger.LogWarning("Login attempt failed: User not found - {Email}", model.Email);
-                    return BadRequest(new AuthResponse
+                    return StatusCode(403, new AuthResponse
                     {
                         Success = false,
                         Errors = new[] { "Invalid email or password" }
                     });
                 }
 
-                // Log the actual email confirmation status from database
                 _logger.LogInformation("User {Email} email confirmation status from database: {IsConfirmed}", 
                     model.Email, 
                     user.EmailConfirmed);
 
-                // Temporarily bypass email confirmation check
-                // var isEmailConfirmed = await _userManager.IsEmailConfirmedAsync(user);
-                // if (!isEmailConfirmed)
-                // {
-                //     return BadRequest(new AuthResponse
-                //     {
-                //         Success = false,
-                //         Errors = new[] { "Vui lòng xác thực email trước khi đăng nhập" }
-                //     });
-                // }
-
+                var isEmailConfirmed = await _userManager.IsEmailConfirmedAsync(user);
+                if (!isEmailConfirmed)
+                {
+                    return StatusCode(401, new AuthResponse
+                    {
+                        Success = false,
+                        Errors = new[] { "Vui lòng xác thực email trước khi đăng nhập" }
+                    });
+                }
                 var result = await _signInManager.PasswordSignInAsync(user, model.Password, false, false);
 
                 if (!result.Succeeded)
                 {
                     _logger.LogWarning("Login attempt failed: Invalid password - {Email}", model.Email);
-                    return BadRequest(new AuthResponse
+                    return StatusCode(403, new AuthResponse
                     {
                         Success = false,
                         Errors = new[] { "Invalid email or password" }

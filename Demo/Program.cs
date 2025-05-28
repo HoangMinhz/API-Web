@@ -1,6 +1,7 @@
 using Demo.Data;
 using Demo.Models;
 using Demo.Models.ViewModel;
+using Demo.Hubs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -59,6 +60,19 @@ builder.Services.AddAuthentication(options =>
             }
             return Task.CompletedTask;
         },
+        OnMessageReceived = context =>
+        {
+            // Support SignalR authentication via query string
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/orderHub"))
+            {
+                context.Token = accessToken;
+            }
+            
+            return Task.CompletedTask;
+        },
         OnTokenValidated = async context =>
         {
             var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<AppUser>>();
@@ -87,6 +101,12 @@ catch (Exception ex)
 {
     Console.WriteLine($"Error registering MoMo service: {ex.Message}");
 }
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+});
 builder.Services.AddControllers();
     
 builder.Services.AddEndpointsApiExplorer();
@@ -184,6 +204,9 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// Map SignalR Hub
+app.MapHub<OrderHub>("/orderHub");
 
 // Seed initial data
 async Task SeedData(IServiceProvider services)

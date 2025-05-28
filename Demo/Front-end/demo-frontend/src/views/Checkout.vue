@@ -66,10 +66,107 @@
               </div>
             </div>
 
+            <!-- Voucher Section -->
+            <div class="border-t border-gray-200 pt-6 mb-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-4">Apply Voucher</h3>
+              
+              <!-- Voucher Input -->
+              <div class="flex space-x-2 mb-4">
+                <input
+                  v-model="voucherCode"
+                  type="text"
+                  placeholder="Enter voucher code"
+                  class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  :disabled="appliedVoucher"
+                />
+                <button
+                  v-if="!appliedVoucher"
+                  @click="validateVoucher"
+                  :disabled="!voucherCode || validatingVoucher"
+                  class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {{ validatingVoucher ? 'Checking...' : 'Apply' }}
+                </button>
+                <button
+                  v-else
+                  @click="removeVoucher"
+                  class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  Remove
+                </button>
+              </div>
+
+              <!-- Applied Voucher Display -->
+              <div v-if="appliedVoucher" class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm font-medium text-green-800">{{ appliedVoucher.code }}</p>
+                    <p class="text-xs text-green-600">
+                      {{ appliedVoucher.discountType === 0 ? `${appliedVoucher.discountValue}% off` : `${formatPrice(appliedVoucher.discountValue)} off` }}
+                    </p>
+                  </div>
+                  <p class="text-sm font-medium text-green-800">-{{ formatPrice(discountAmount) }}</p>
+                </div>
+              </div>
+
+              <!-- Available Vouchers -->
+              <div v-if="!appliedVoucher && availableVouchers.length > 0" class="mb-4">
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Available Vouchers</h4>
+                <div class="space-y-2 max-h-40 overflow-y-auto">
+                  <div
+                    v-for="voucher in availableVouchers"
+                    :key="voucher.voucherId"
+                    @click="selectVoucher(voucher.code)"
+                    class="p-3 border border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition"
+                  >
+                    <div class="flex items-center justify-between">
+                      <div>
+                        <p class="text-sm font-medium text-gray-900">{{ voucher.code }}</p>
+                        <p class="text-xs text-gray-500">
+                          {{ voucher.discountType === 0 ? `${voucher.discountValue}% off` : `${formatPrice(voucher.discountValue)} off` }}
+                          {{ voucher.maxDiscount ? ` (max ${formatPrice(voucher.maxDiscount)})` : '' }}
+                        </p>
+                        <p v-if="voucher.minOrderValue" class="text-xs text-gray-500">
+                          Min order: {{ formatPrice(voucher.minOrderValue) }}
+                        </p>
+                      </div>
+                      <div class="text-right">
+                        <p v-if="voucher.minOrderValue && subtotal < voucher.minOrderValue" class="text-xs text-orange-600">
+                          Need {{ formatPrice(voucher.minOrderValue - subtotal) }} more
+                        </p>
+                        <p v-else class="text-xs text-green-600">Available</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Voucher Recommendations -->
+              <div v-if="voucherRecommendations.length > 0" class="mb-4">
+                <h4 class="text-sm font-medium text-gray-700 mb-2">💡 Add more to unlock vouchers</h4>
+                <div class="space-y-2">
+                  <div
+                    v-for="rec in voucherRecommendations"
+                    :key="rec.voucherId"
+                    class="p-2 bg-yellow-50 border border-yellow-200 rounded-lg"
+                  >
+                    <p class="text-xs text-yellow-800">
+                      Add {{ formatPrice(rec.amountNeeded) }} more to use <strong>{{ rec.code }}</strong>
+                      ({{ rec.discountType === 0 ? `${rec.discountValue}% off` : `${formatPrice(rec.discountValue)} off` }})
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="space-y-3 border-t border-gray-200 pt-6">
               <div class="flex justify-between">
                 <span class="text-gray-600">Subtotal</span>
                 <span class="text-gray-900">{{ formatPrice(subtotal) }}</span>
+              </div>
+              <div v-if="appliedVoucher" class="flex justify-between text-green-600">
+                <span>Voucher Discount ({{ appliedVoucher.code }})</span>
+                <span>-{{ formatPrice(discountAmount) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Tax (10%)</span>
@@ -77,7 +174,10 @@
               </div>
               <div class="flex justify-between text-lg font-semibold pt-3">
                 <span class="text-gray-900">Total</span>
-                <span class="text-blue-600">{{ formatPrice(total) }}</span>
+                <span class="text-blue-600">{{ formatPrice(finalTotal) }}</span>
+              </div>
+              <div v-if="appliedVoucher" class="text-sm text-green-600 text-center">
+                You saved {{ formatPrice(discountAmount) }}!
               </div>
             </div>
           </div>
@@ -271,7 +371,13 @@ export default {
       provinces,
       districts: [],
       validationErrors: {},
-      currentStep: 1
+      currentStep: 1,
+      voucherCode: '',
+      appliedVoucher: null,
+      discountAmount: 0,
+      availableVouchers: [],
+      voucherRecommendations: [],
+      validatingVoucher: false
     };
   },
   watch: {
@@ -320,10 +426,14 @@ export default {
         this.shippingInfo.province &&
         (this.districts.length === 0 || this.shippingInfo.district)
       );
+    },
+    finalTotal() {
+      return this.total - this.discountAmount;
     }
   },
   async created() {
     await this.fetchUserInfo();
+    await this.fetchAvailableVouchers();
   },
   methods: {
     ...mapActions('cart', ['clearCart']),
@@ -374,6 +484,8 @@ export default {
       try {
         const response = await api.get('/User/current');
         this.userInfo = response.data;
+        console.log('User info received:', this.userInfo);
+        
         // Auto-fill shipping information
         this.shippingInfo = {
           ...this.shippingInfo,
@@ -384,6 +496,8 @@ export default {
           province: this.userInfo.province || '',
           district: this.userInfo.district || ''
         };
+        
+        console.log('Shipping info after auto-fill:', this.shippingInfo);
       } catch (error) {
         console.error('Failed to fetch user info:', error);
         this.showNotification({
@@ -409,6 +523,10 @@ export default {
         const selectedProvince = this.provinces.find(p => p.code === this.shippingInfo.province);
         const selectedDistrict = this.districts.find(d => d.code === this.shippingInfo.district);
         
+        console.log('Selected province:', selectedProvince);
+        console.log('Selected district:', selectedDistrict);
+        console.log('Shipping info before address construction:', this.shippingInfo);
+        
         // Build address string based on available data
         let addressParts = [this.shippingInfo.address];
         if (selectedDistrict?.name) {
@@ -418,23 +536,31 @@ export default {
           addressParts.push(selectedProvince.name);
         }
         
+        console.log('Address parts:', addressParts);
+        const finalShippingAddress = addressParts.join(', ');
+        console.log('Final shipping address:', finalShippingAddress);
+        
         const orderData = {
-          shippingAddress: addressParts.join(', '),
+          shippingAddress: finalShippingAddress,
           phoneNumber: this.shippingInfo.phone,
           fullName: this.shippingInfo.fullName,
-          notes: `Payment Method: ${this.shippingInfo.paymentMethod}`,
+          notes: `Payment Method: ${this.shippingInfo.paymentMethod}${this.appliedVoucher ? `, Voucher: ${this.appliedVoucher.code}` : ''}`,
           items: this.cartItems.map(item => ({
             productId: item.productId,
             quantity: item.quantity
-          }))
+          })),
+          voucherCode: this.appliedVoucher?.code || null,
+          discountAmount: this.discountAmount || 0
         };
+        
+        console.log('Order data being sent:', orderData);
 
         const response = await api.post('/Order', orderData);
         
         // Handle payment based on method
         if (this.shippingInfo.paymentMethod === 'momo') {
           // Process MoMo payment
-          await this.processMomoPayment(response.data.id, response.data.totalAmount || this.total);
+          await this.processMomoPayment(response.data.id, this.finalTotal);
         } else {
           // For COD and bank transfer, show success and redirect
           this.showNotification({
@@ -491,6 +617,76 @@ export default {
           type: 'error',
           message: error.response?.data?.message || 'Failed to process payment. Please try again.'
         });
+      }
+    },
+    async validateVoucher() {
+      this.validatingVoucher = true;
+      try {
+        const response = await api.post('/Voucher/validate', {
+          code: this.voucherCode,
+          orderAmount: this.subtotal
+        });
+        
+        this.appliedVoucher = response.data.voucher;
+        this.discountAmount = response.data.discountAmount;
+        
+        this.showNotification({
+          type: 'success',
+          message: `Voucher applied! You saved ${this.formatPrice(this.discountAmount)}`
+        });
+      } catch (error) {
+        console.error('Failed to validate voucher:', error);
+        this.showNotification({
+          type: 'error',
+          message: error.response?.data?.message || 'Failed to validate voucher. Please try again.'
+        });
+      } finally {
+        this.validatingVoucher = false;
+      }
+    },
+    removeVoucher() {
+      this.appliedVoucher = null;
+      this.discountAmount = 0;
+      this.voucherCode = '';
+      
+      this.showNotification({
+        type: 'info',
+        message: 'Voucher removed'
+      });
+    },
+    selectVoucher(code) {
+      this.voucherCode = code;
+      this.validateVoucher();
+    },
+    async fetchAvailableVouchers() {
+      try {
+        console.log('Fetching available vouchers...');
+        const response = await api.get('/Voucher');
+        console.log('Vouchers API response:', response.data);
+        console.log('Current subtotal:', this.subtotal);
+        
+        this.availableVouchers = response.data.filter(voucher => {
+          // Filter vouchers that can be applied to current order
+          const canApply = !voucher.minOrderValue || this.subtotal >= voucher.minOrderValue;
+          console.log(`Voucher ${voucher.code}: minOrderValue=${voucher.minOrderValue}, canApply=${canApply}`);
+          return canApply;
+        });
+        
+        console.log('Available vouchers after filtering:', this.availableVouchers);
+        
+        // Get recommendations for vouchers that need more amount
+        this.voucherRecommendations = response.data
+          .filter(voucher => voucher.minOrderValue && this.subtotal < voucher.minOrderValue)
+          .map(voucher => ({
+            ...voucher,
+            amountNeeded: voucher.minOrderValue - this.subtotal
+          }))
+          .sort((a, b) => a.amountNeeded - b.amountNeeded)
+          .slice(0, 3); // Show top 3 recommendations
+          
+        console.log('Voucher recommendations:', this.voucherRecommendations);
+      } catch (error) {
+        console.error('Failed to fetch available vouchers:', error);
       }
     }
   }

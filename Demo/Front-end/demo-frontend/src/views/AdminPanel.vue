@@ -176,6 +176,103 @@
           </ul>
         </div>
       </div>
+
+      <!-- Vouchers Tab -->
+      <div v-if="activeTab === 'vouchers'" class="space-y-8">
+        <!-- Add Voucher Button -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+          <div class="flex justify-between items-center">
+            <h2 class="text-xl font-semibold text-gray-800">Vouchers Management</h2>
+            <button
+              @click="openAddVoucherModal"
+              class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+              </svg>
+              Add New Voucher
+            </button>
+          </div>
+        </div>
+
+        <!-- Vouchers Table -->
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-800">All Vouchers</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min Order</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valid Period</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr v-for="voucher in vouchers" :key="voucher.voucherId">
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">{{ voucher.code }}</div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">
+                      {{ voucher.discountType === 0 ? `${voucher.discountValue}%` : formatPrice(voucher.discountValue) }}
+                      <span v-if="voucher.maxDiscount" class="text-xs text-gray-500">
+                        (max {{ formatPrice(voucher.maxDiscount) }})
+                      </span>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">
+                      {{ voucher.minOrderValue ? formatPrice(voucher.minOrderValue) : 'No minimum' }}
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">
+                      {{ voucher.usedCount }}{{ voucher.usageLimit ? `/${voucher.usageLimit}` : '' }}
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">
+                      <div v-if="voucher.startDate">From: {{ formatDate(voucher.startDate) }}</div>
+                      <div v-if="voucher.endDate">To: {{ formatDate(voucher.endDate) }}</div>
+                      <div v-if="!voucher.startDate && !voucher.endDate" class="text-gray-500">No expiry</div>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span
+                      :class="[
+                        'px-2 inline-flex text-xs leading-5 font-semibold rounded-full',
+                        voucher.isActive && isVoucherValid(voucher) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      ]"
+                    >
+                      {{ getVoucherStatus(voucher) }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      @click="editVoucher(voucher)"
+                      class="text-blue-600 hover:text-blue-900 mr-4"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      @click="toggleVoucherStatus(voucher)"
+                      :class="voucher.isActive ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'"
+                    >
+                      {{ voucher.isActive ? 'Deactivate' : 'Activate' }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -394,6 +491,300 @@
       </div>
     </div>
   </div>
+
+  <!-- Add Voucher Modal -->
+  <div v-if="showAddVoucherModal" class="fixed inset-0 overflow-y-auto z-50">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+      </div>
+
+      <!-- Modal panel -->
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <form @submit.prevent="addVoucher">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Voucher Code *
+              </label>
+              <input
+                type="text"
+                v-model="newVoucher.code"
+                required
+                placeholder="e.g., SAVE20, WELCOME10"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Discount Type *
+              </label>
+              <select
+                v-model.number="newVoucher.discountType"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+              >
+                <option :value="0">Percentage (%)</option>
+                <option :value="1">Fixed Amount</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Discount Value *
+                </label>
+                <input
+                  type="number"
+                  v-model.number="newVoucher.discountValue"
+                  required
+                  min="0"
+                  :step="newVoucher.discountType === 0 ? '1' : '0.01'"
+                  :placeholder="newVoucher.discountType === 0 ? 'e.g., 20 (for 20%)' : 'e.g., 50000'"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div v-if="newVoucher.discountType === 0">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Max Discount Amount
+                </label>
+                <input
+                  type="number"
+                  v-model.number="newVoucher.maxDiscount"
+                  min="0"
+                  step="0.01"
+                  placeholder="Optional"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Min Order Value
+                </label>
+                <input
+                  type="number"
+                  v-model.number="newVoucher.minOrderValue"
+                  min="0"
+                  step="0.01"
+                  placeholder="Optional"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Usage Limit
+                </label>
+                <input
+                  type="number"
+                  v-model.number="newVoucher.usageLimit"
+                  min="1"
+                  placeholder="Optional"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Start Date
+                </label>
+                <input
+                  type="datetime-local"
+                  v-model="newVoucher.startDate"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  End Date
+                </label>
+                <input
+                  type="datetime-local"
+                  v-model="newVoucher.endDate"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Create Voucher
+            </button>
+            <button
+              type="button"
+              @click="closeAddVoucherModal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Voucher Modal -->
+  <div v-if="showEditVoucherModal" class="fixed inset-0 overflow-y-auto z-50">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+      </div>
+
+      <!-- Modal panel -->
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <form @submit.prevent="updateVoucher">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Voucher Code *
+              </label>
+              <input
+                type="text"
+                v-model="editingVoucher.code"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Discount Type *
+              </label>
+              <select
+                v-model.number="editingVoucher.discountType"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+              >
+                <option :value="0">Percentage (%)</option>
+                <option :value="1">Fixed Amount</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Discount Value *
+                </label>
+                <input
+                  type="number"
+                  v-model.number="editingVoucher.discountValue"
+                  required
+                  min="0"
+                  :step="editingVoucher.discountType === 0 ? '1' : '0.01'"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div v-if="editingVoucher.discountType === 0">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Max Discount Amount
+                </label>
+                <input
+                  type="number"
+                  v-model.number="editingVoucher.maxDiscount"
+                  min="0"
+                  step="0.01"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Min Order Value
+                </label>
+                <input
+                  type="number"
+                  v-model.number="editingVoucher.minOrderValue"
+                  min="0"
+                  step="0.01"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Usage Limit
+                </label>
+                <input
+                  type="number"
+                  v-model.number="editingVoucher.usageLimit"
+                  min="1"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Start Date
+                </label>
+                <input
+                  type="datetime-local"
+                  v-model="editingVoucher.startDate"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  End Date
+                </label>
+                <input
+                  type="datetime-local"
+                  v-model="editingVoucher.endDate"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="flex items-center">
+                <input
+                  type="checkbox"
+                  v-model="editingVoucher.isActive"
+                  class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                />
+                <span class="ml-2 text-sm text-gray-700">Active</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Update Voucher
+            </button>
+            <button
+              type="button"
+              @click="closeEditVoucherModal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -407,13 +798,15 @@ export default {
     return {
       activeTab: 'products',
       showAddModal: false,
-      showEditModal: false, // Add this missing property
+      showEditModal: false,
       tabs: [
         { id: 'products', name: 'Products' },
-        { id: 'categories', name: 'Categories' }
+        { id: 'categories', name: 'Categories' },
+        { id: 'vouchers', name: 'Vouchers' }
       ],
       products: [],
       categories: [],
+      vouchers: [],
       newProduct: {
         name: '',
         description: '',
@@ -425,7 +818,17 @@ export default {
       newCategory: {
         name: ''
       },
-      editingProduct: { // Add this missing property with default values
+      newVoucher: {
+        code: '',
+        discountType: 0, // 0 = PERCENTAGE, 1 = FIXED_AMOUNT
+        discountValue: 0,
+        maxDiscount: null,
+        minOrderValue: null,
+        startDate: '',
+        endDate: '',
+        usageLimit: null
+      },
+      editingProduct: {
         id: null,
         name: '',
         description: '',
@@ -433,7 +836,21 @@ export default {
         stock: 0,
         imageUrl: '',
         categoryId: null
-      }
+      },
+      editingVoucher: {
+        voucherId: null,
+        code: '',
+        discountType: 0,
+        discountValue: 0,
+        maxDiscount: null,
+        minOrderValue: null,
+        startDate: '',
+        endDate: '',
+        usageLimit: null,
+        isActive: true
+      },
+      showAddVoucherModal: false,
+      showEditVoucherModal: false
     };
   },
   computed: {
@@ -442,7 +859,7 @@ export default {
     }
   },
   async created() {
-    await Promise.all([this.fetchProducts(), this.fetchCategories()]);
+    await Promise.all([this.fetchProducts(), this.fetchCategories(), this.fetchVouchers()]);
   },
   methods: {
     formatPrice,
@@ -467,6 +884,18 @@ export default {
         this.$store.dispatch('notification/showNotification', {
           type: 'error',
           message: 'Failed to load categories'
+        }, { root: true });
+      }
+    },
+    async fetchVouchers() {
+      try {
+        const response = await api.get('/Voucher/admin');
+        this.vouchers = response.data;
+      } catch (error) {
+        console.error('Failed to fetch vouchers:', error);
+        this.$store.dispatch('notification/showNotification', {
+          type: 'error',
+          message: 'Failed to load vouchers'
         }, { root: true });
       }
     },
@@ -698,7 +1127,7 @@ export default {
         });
       }
     },
-      openAddProductModal() {
+    openAddProductModal() {
       this.showAddModal = true;
       // Reset form
       this.newProduct = {
@@ -712,6 +1141,152 @@ export default {
     },
     closeAddModal() {
       this.showAddModal = false;
+    },
+    openAddVoucherModal() {
+      this.showAddVoucherModal = true;
+      // Reset form
+      this.newVoucher = {
+        code: '',
+        discountType: 0,
+        discountValue: 0,
+        maxDiscount: null,
+        minOrderValue: null,
+        startDate: '',
+        endDate: '',
+        usageLimit: null
+      };
+    },
+    async addVoucher() {
+      try {
+        await api.post('/Voucher', this.newVoucher);
+        await this.fetchVouchers();
+        this.newVoucher = {
+          code: '',
+          discountType: 0,
+          discountValue: 0,
+          maxDiscount: null,
+          minOrderValue: null,
+          startDate: '',
+          endDate: '',
+          usageLimit: null
+        };
+        this.closeAddVoucherModal();
+        this.$store.dispatch('notification/showNotification', {
+          type: 'success',
+          message: 'Voucher added successfully'
+        }, { root: true });
+      } catch (error) {
+        console.error('Failed to add voucher:', error);
+        this.$store.dispatch('notification/showNotification', {
+          type: 'error',
+          message: 'Failed to add voucher'
+        }, { root: true });
+      }
+    },
+    closeAddVoucherModal() {
+      this.showAddVoucherModal = false;
+    },
+    async editVoucher(voucher) {
+      this.editingVoucher = {
+        voucherId: voucher.voucherId,
+        code: voucher.code,
+        discountType: voucher.discountType,
+        discountValue: voucher.discountValue,
+        maxDiscount: voucher.maxDiscount,
+        minOrderValue: voucher.minOrderValue,
+        startDate: voucher.startDate,
+        endDate: voucher.endDate,
+        usageLimit: voucher.usageLimit,
+        isActive: voucher.isActive
+      };
+      this.showEditVoucherModal = true;
+    },
+    closeEditVoucherModal() {
+      this.showEditVoucherModal = false;
+      this.editingVoucher = {
+        voucherId: null,
+        code: '',
+        discountType: 0,
+        discountValue: 0,
+        maxDiscount: null,
+        minOrderValue: null,
+        startDate: '',
+        endDate: '',
+        usageLimit: null,
+        isActive: true
+      };
+    },
+    async updateVoucher() {
+      try {
+        await api.put(`/Voucher/${this.editingVoucher.voucherId}`, this.editingVoucher);
+        await this.fetchVouchers();
+        this.$store.dispatch('notification/showNotification', {
+          type: 'success',
+          message: 'Voucher updated successfully'
+        }, { root: true });
+        this.closeEditVoucherModal();
+      } catch (error) {
+        console.error('Failed to update voucher:', error);
+        this.$store.dispatch('notification/showNotification', {
+          type: 'error',
+          message: 'Failed to update voucher'
+        }, { root: true });
+      }
+    },
+    getVoucherStatus(voucher) {
+      if (!voucher.isActive) {
+        return 'Inactive';
+      }
+      if (this.isVoucherValid(voucher)) {
+        return 'Active';
+      } else {
+        return 'Expired';
+      }
+    },
+    isVoucherValid(voucher) {
+      const today = new Date();
+      const startDate = voucher.startDate ? new Date(voucher.startDate) : null;
+      const endDate = voucher.endDate ? new Date(voucher.endDate) : null;
+      
+      if (startDate && today < startDate) return false;
+      if (endDate && today > endDate) return false;
+      if (voucher.usageLimit && voucher.usedCount >= voucher.usageLimit) return false;
+      
+      return true;
+    },
+    formatDate(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString();
+    },
+    async toggleVoucherStatus(voucher) {
+      try {
+        const updatedVoucher = {
+          code: voucher.code,
+          discountType: voucher.discountType,
+          discountValue: voucher.discountValue,
+          maxDiscount: voucher.maxDiscount,
+          minOrderValue: voucher.minOrderValue,
+          startDate: voucher.startDate,
+          endDate: voucher.endDate,
+          usageLimit: voucher.usageLimit,
+          isActive: !voucher.isActive
+        };
+        
+        await api.put(`/Voucher/${voucher.voucherId}`, updatedVoucher);
+        await this.fetchVouchers();
+        
+        this.$store.dispatch('notification/showNotification', {
+          type: 'success',
+          message: `Voucher ${updatedVoucher.isActive ? 'activated' : 'deactivated'} successfully`
+        }, { root: true });
+      } catch (error) {
+        console.error('Failed to toggle voucher status:', error);
+        this.$store.dispatch('notification/showNotification', {
+          type: 'error',
+          message: 'Failed to update voucher status'
+        }, { root: true });
+      }
     }
   }
 };

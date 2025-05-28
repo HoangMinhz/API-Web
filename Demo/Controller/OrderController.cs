@@ -8,6 +8,8 @@ using Demo.Data;
 using System.ComponentModel.DataAnnotations;
 using Demo.Models.ViewModel;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.SignalR;
+using Demo.Hubs;
 
 namespace Demo.Controllers
 {
@@ -19,13 +21,16 @@ namespace Demo.Controllers
         private readonly AppDbContext _context;
         private readonly ILogger<OrderController> _logger;
         private readonly UserManager<AppUser> _userManager;
+        private readonly IHubContext<OrderHub> _hubContext;
 
-        public OrderController(AppDbContext context, ILogger<OrderController> logger, UserManager<AppUser> userManager)
+        public OrderController(AppDbContext context, ILogger<OrderController> logger, UserManager<AppUser> userManager, IHubContext<OrderHub> hubContext)
         {
             _context = context;
             _logger = logger;
             _userManager = userManager;
+            _hubContext = hubContext;
         }
+        
 
         private int? GetUserId()
         {
@@ -79,6 +84,8 @@ namespace Demo.Controllers
                         PhoneNumber = o.PhoneNumber,
                         FullName = o.FullName,
                         Notes = o.Notes,
+                        VoucherCode = o.VoucherCode,
+                        DiscountAmount = o.DiscountAmount,
                         OrderItems = o.OrderItems.Select(oi => new OrderItemDto
                         {
                             Id = oi.Id,
@@ -180,6 +187,33 @@ namespace Demo.Controllers
 
                         _logger.LogInformation("Successfully cancelled order {OrderId}", id);
 
+                        // SignalR: Notify about order cancellation
+                        await _hubContext.Clients.Group($"user-{userId.Value}").SendAsync("OrderCancelled", new
+                        {
+                            OrderId = order.Id,
+                            UserId = userId.Value,
+                            Timestamp = DateTime.UtcNow,
+                            Message = $"Your order #{order.Id} has been cancelled successfully"
+                        });
+
+                        // Notify specific order group
+                        await _hubContext.Clients.Group($"order-{order.Id}").SendAsync("OrderCancelled", new
+                        {
+                            OrderId = order.Id,
+                            UserId = userId.Value,
+                            Timestamp = DateTime.UtcNow,
+                            Message = $"Order #{order.Id} has been cancelled"
+                        });
+
+                        // Notify admin dashboard
+                        await _hubContext.Clients.Group("admin-dashboard").SendAsync("OrderCancelled", new
+                        {
+                            OrderId = order.Id,
+                            UserId = userId.Value,
+                            Timestamp = DateTime.UtcNow,
+                            Message = $"Order #{order.Id} was cancelled by user {userId.Value}"
+                        });
+
                         return Ok(new
                         {
                             id = order.Id,
@@ -234,6 +268,8 @@ namespace Demo.Controllers
                     PhoneNumber = order.PhoneNumber,
                     FullName = order.FullName,
                     Notes = order.Notes,
+                    VoucherCode = order.VoucherCode,
+                    DiscountAmount = order.DiscountAmount,
                     OrderItems = order.OrderItems.Select(oi => new OrderItemDto
                     {
                         Id = oi.Id,
@@ -280,7 +316,9 @@ namespace Demo.Controllers
                     ShippingAddress = model.ShippingAddress,
                     PhoneNumber = model.PhoneNumber,
                     FullName = model.FullName,
-                    Notes = model.Notes
+                    Notes = model.Notes,
+                    VoucherCode = model.VoucherCode,
+                    DiscountAmount = 0
                 };
 
                 decimal subtotal = 0;
@@ -321,18 +359,167 @@ namespace Demo.Controllers
                         item.ProductId, item.Quantity, orderItem.TotalPrice);
                 }
 
-                // Calculate tax (10%) and round to 2 decimal places
-                decimal tax = Math.Round(subtotal * 0.1m, 2);
-                order.TotalAmount = Math.Round(subtotal + tax, 2);
+                // Apply voucher discount if provided
+                if (!string.IsNullOrEmpty(model.VoucherCode))
+                {
+                    try
+                    {
+                        var voucher = await _context.Vouchers
+                            .FirstOrDefaultAsync(v => v.Code == model.VoucherCode.ToUpper());
 
-                _logger.LogInformation("Order total amount: Subtotal={Subtotal}, Tax={Tax}, Total={Total}", 
-                    subtotal, tax, order.TotalAmount);
+                        if (voucher != null)
+                        {
+                            // Validate voucher
+                            var now = DateTime.UtcNow;
+                            bool isValid = true;
+                            string validationError = "";
+
+                            if (!voucher.IsActive)
+                            {
+                                isValid = false;
+                                validationError = "Voucher is not active";
+                            }
+                            else if (voucher.StartDate.HasValue && voucher.StartDate.Value.Date > now.Date)
+                            {
+                                isValid = false;
+                                validationError = "Voucher is not yet active";
+                            }
+                            else if (voucher.EndDate.HasValue && voucher.EndDate.Value.Date < now.Date)
+                            {
+                                isValid = false;
+                                validationError = "Voucher has expired";
+                            }
+                            else if (voucher.UsageLimit.HasValue && voucher.UsedCount >= voucher.UsageLimit.Value)
+                            {
+                                isValid = false;
+                                validationError = "Voucher usage limit exceeded";
+                            }
+                            else if (voucher.MinOrderValue.HasValue && subtotal < voucher.MinOrderValue.Value)
+                            {
+                                isValid = false;
+                                validationError = $"Minimum order value is {voucher.MinOrderValue:C}";
+                            }
+
+                            // Check if user has already used this voucher
+                            var userVoucher = await _context.UserVouchers
+                                .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucher.VoucherId && uv.UsedAt.HasValue);
+
+                            if (userVoucher != null)
+                            {
+                                isValid = false;
+                                validationError = "You have already used this voucher";
+                            }
+
+                            if (isValid)
+                            {
+                                // Calculate discount
+                                decimal discountAmount = 0;
+                                if (voucher.DiscountType == DiscountType.PERCENTAGE)
+                                {
+                                    discountAmount = subtotal * (voucher.DiscountValue / 100);
+                                    if (voucher.MaxDiscount.HasValue && discountAmount > voucher.MaxDiscount.Value)
+                                    {
+                                        discountAmount = voucher.MaxDiscount.Value;
+                                    }
+                                }
+                                else
+                                {
+                                    discountAmount = voucher.DiscountValue;
+                                }
+
+                                // Ensure discount doesn't exceed subtotal
+                                if (discountAmount > subtotal)
+                                {
+                                    discountAmount = subtotal;
+                                }
+
+                                order.DiscountAmount = Math.Round(discountAmount, 2);
+
+                                // Create user voucher record
+                                var newUserVoucher = new UserVoucher
+                                {
+                                    UserId = userId,
+                                    VoucherId = voucher.VoucherId,
+                                    UsedAt = DateTime.UtcNow,
+                                    OrderId = null // Will be set after order is saved
+                                };
+
+                                _context.UserVouchers.Add(newUserVoucher);
+
+                                // Increment voucher usage count
+                                voucher.UsedCount++;
+
+                                _logger.LogInformation("Applied voucher {VoucherCode} with discount {DiscountAmount}", 
+                                    voucher.Code, order.DiscountAmount);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Voucher validation failed: {Error}", validationError);
+                                return BadRequest($"Voucher validation failed: {validationError}");
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Invalid voucher code: {VoucherCode}", model.VoucherCode);
+                            return BadRequest("Invalid voucher code");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error processing voucher {VoucherCode}", model.VoucherCode);
+                        return BadRequest("Error processing voucher");
+                    }
+                }
+
+                // Calculate tax (10%) on discounted amount and round to 2 decimal places
+                decimal discountedSubtotal = subtotal - order.DiscountAmount;
+                decimal tax = Math.Round(discountedSubtotal * 0.1m, 2);
+                order.TotalAmount = Math.Round(discountedSubtotal + tax, 2);
+
+                _logger.LogInformation("Order total calculation: Subtotal={Subtotal}, Discount={Discount}, DiscountedSubtotal={DiscountedSubtotal}, Tax={Tax}, Total={Total}", 
+                    subtotal, order.DiscountAmount, discountedSubtotal, tax, order.TotalAmount);
 
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Order created successfully: OrderId={OrderId}, TotalAmount={TotalAmount}", 
-                    order.Id, order.TotalAmount);
+                // Update UserVoucher with OrderId if voucher was applied
+                if (!string.IsNullOrEmpty(model.VoucherCode) && order.DiscountAmount > 0)
+                {
+                    var userVoucher = await _context.UserVouchers
+                        .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.OrderId == null && uv.UsedAt != null);
+                    if (userVoucher != null)
+                    {
+                        userVoucher.OrderId = order.Id;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                _logger.LogInformation("Order created successfully: OrderId={OrderId}, TotalAmount={TotalAmount}, DiscountAmount={DiscountAmount}", 
+                    order.Id, order.TotalAmount, order.DiscountAmount);
+
+                // SignalR: Notify about new order creation
+                _logger.LogInformation("Sending SignalR notification to user-{UserId} for new order {OrderId}", userId, order.Id);
+                await _hubContext.Clients.Group($"user-{userId}").SendAsync("NewOrderCreated", new
+                {
+                    OrderId = order.Id,
+                    TotalAmount = order.TotalAmount,
+                    Timestamp = DateTime.UtcNow,
+                    Message = $"Your order #{order.Id} has been created successfully!"
+                });
+
+                // Notify admin dashboard about new order
+                _logger.LogInformation("Sending SignalR notification to admin-dashboard for new order {OrderId} from user {UserId}", order.Id, userId);
+                var adminNotificationData = new
+                {
+                    OrderId = order.Id,
+                    UserId = userId,
+                    TotalAmount = order.TotalAmount,
+                    Timestamp = DateTime.UtcNow,
+                    Message = $"New order #{order.Id} received from user {userId}"
+                };
+                _logger.LogInformation("Admin notification data: {@AdminNotificationData}", adminNotificationData);
+                await _hubContext.Clients.Group("admin-dashboard").SendAsync("NewOrderReceived", adminNotificationData);
+                _logger.LogInformation("SignalR notifications sent successfully for order {OrderId}", order.Id);
 
                 return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, new
                 {
@@ -426,6 +613,37 @@ namespace Demo.Controllers
 
                             _logger.LogInformation("Successfully updated order {OrderId} status from {OldStatus} to {NewStatus}", 
                                 id, oldStatus, model.Status);
+
+                            // SignalR: Notify about order status change
+                            await _hubContext.Clients.Group($"user-{orderToUpdate.UserId}").SendAsync("OrderStatusChanged", new
+                            {
+                                OrderId = orderToUpdate.Id,
+                                OldStatus = oldStatus.ToString(),
+                                NewStatus = model.Status.ToString(),
+                                Timestamp = DateTime.UtcNow,
+                                Message = GetStatusChangeMessage(oldStatus, model.Status, orderToUpdate.Id)
+                            });
+
+                            // Notify specific order group
+                            await _hubContext.Clients.Group($"order-{orderToUpdate.Id}").SendAsync("OrderStatusChanged", new
+                            {
+                                OrderId = orderToUpdate.Id,
+                                OldStatus = oldStatus.ToString(),
+                                NewStatus = model.Status.ToString(),
+                                Timestamp = DateTime.UtcNow,
+                                Message = GetStatusChangeMessage(oldStatus, model.Status, orderToUpdate.Id)
+                            });
+
+                            // Notify admin dashboard
+                            await _hubContext.Clients.Group("admin-dashboard").SendAsync("OrderStatusChanged", new
+                            {
+                                OrderId = orderToUpdate.Id,
+                                UserId = orderToUpdate.UserId,
+                                OldStatus = oldStatus.ToString(),
+                                NewStatus = model.Status.ToString(),
+                                Timestamp = DateTime.UtcNow,
+                                Message = $"Order #{orderToUpdate.Id} status changed from {oldStatus} to {model.Status}"
+                            });
 
                             return Ok(new
                             {
@@ -681,43 +899,66 @@ namespace Demo.Controllers
             }
         }
 
-    public class CreateOrderModel
-    {
-        [Required]
-        [MaxLength(200)]
-        public string ShippingAddress { get; set; }
+        /// <summary>
+        /// Get user-friendly status change message
+        /// </summary>
+        /// <param name="oldStatus">Previous status</param>
+        /// <param name="newStatus">New status</param>
+        /// <param name="orderId">Order ID</param>
+        /// <returns>User-friendly message</returns>
+        private string GetStatusChangeMessage(OrderStatus oldStatus, OrderStatus newStatus, int orderId)
+        {
+            return newStatus switch
+            {
+                OrderStatus.Pending => $"Your order #{orderId} is now pending confirmation.",
+                OrderStatus.Processing => $"Your order #{orderId} is currently being processed.",
+                OrderStatus.Shipped => $"Your order #{orderId} has been shipped and is on its way to you!",
+                OrderStatus.Delivered => $"Your order #{orderId} has been delivered successfully!",
+                OrderStatus.Cancelled => $"Your order #{orderId} has been cancelled.",
+                _ => $"Your order #{orderId} status has been updated from {oldStatus} to {newStatus}."
+            };
+        }
 
-        [Required]
-        [MaxLength(20)]
-        public string PhoneNumber { get; set; }
+        public class CreateOrderModel
+        {
+            [Required]
+            [MaxLength(200)]
+            public string ShippingAddress { get; set; }
 
-        [Required]
-        [MaxLength(100)]
-        public string FullName { get; set; }
+            [Required]
+            [MaxLength(20)]
+            public string PhoneNumber { get; set; }
 
-        [MaxLength(500)]
-        public string? Notes { get; set; }
+            [Required]
+            [MaxLength(100)]
+            public string FullName { get; set; }
 
-        [Required]
-        [MinLength(1)]
-        public List<OrderItemModel> Items { get; set; }
-    }
+            [MaxLength(500)]
+            public string? Notes { get; set; }
 
-    public class OrderItemModel
-    {
-        [Required]
-        public int ProductId { get; set; }
+            [Required]
+            [MinLength(1)]
+            public List<OrderItemModel> Items { get; set; }
 
-        [Required]
-        [Range(1, int.MaxValue)]
-        public int Quantity { get; set; }
-    }
+            [MaxLength(50)]
+            public string? VoucherCode { get; set; }
+        }
 
-    public class UpdateOrderStatusModel
-    {
-        [Required]
+        public class OrderItemModel
+        {
+            [Required]
+            public int ProductId { get; set; }
+
+            [Required]
+            [Range(1, int.MaxValue)]
+            public int Quantity { get; set; }
+        }
+
+        public class UpdateOrderStatusModel
+        {
+            [Required]
             [Range(0, 4, ErrorMessage = "Status must be between 0 and 4")]
-        public OrderStatus Status { get; set; }
+            public OrderStatus Status { get; set; }
         }
 
         public class OrderFilterModel

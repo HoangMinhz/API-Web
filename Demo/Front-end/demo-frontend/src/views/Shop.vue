@@ -50,66 +50,12 @@
 
       <!-- Products Grid -->
       <div id="products-section" v-if="!loading && products.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        <div
+        <ProductCard
           v-for="product in paginatedProducts"
           :key="product.id"
-          class="flex-shrink-0 w-72 relative bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 h-[500px] flex flex-col"
-        >
-          <!-- Product Image -->
-          <router-link :to="`/products/${product.id}`" class="flex-1 flex flex-col">
-            <div class="relative overflow-hidden rounded-t-xl flex-1">
-              <img
-                :src="getProductImage(product)"
-                :alt="product.name"
-                class="w-full h-full object-cover transition-transform duration-300 transform hover:scale-110"
-                loading="lazy"
-              />
-              <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-            </div>
-            <!-- Product Info -->
-            <div class="p-4 flex flex-col flex-1">
-              <h3 class="text-lg font-semibold text-gray-800 mb-1 truncate">{{ product.name }}</h3>
-              <p class="text-sm text-gray-600 line-clamp-2 mb-2">{{ product.description }}</p>
-              
-              <!-- Rating and Sold Count -->
-              <div class="flex items-center mb-2">
-                <div class="flex items-center">
-                  <svg v-for="star in 5" :key="star" 
-                    class="w-4 h-4" 
-                    :class="star <= product.rating ? 'text-yellow-400' : 'text-gray-300'"
-                    fill="currentColor" 
-                    viewBox="0 0 20 20"
-                  >
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                </div>
-                <span class="text-sm text-gray-500 ml-1">({{ product.rating }})</span>
-                <span class="text-sm text-gray-500 ml-2">|</span>
-                <span class="text-sm text-gray-500 ml-2">{{ product.soldCount || 0 }} sold</span>
-              </div>
-
-              <div class="flex justify-between items-center mt-auto">
-                <p class="text-lg font-bold text-gray-800">{{ formatPrice(product.price) }}</p>
-                <p class="text-xs text-gray-500">{{ getCategoryName(product.categoryId) }}</p>
-              </div>
-            </div>
-          </router-link>
-          <!-- Quick View and Add to Cart Buttons -->
-          <div class="px-4 pb-4 flex space-x-2">
-            <button
-              @click="openQuickView(product)"
-              class="flex-1 bg-gray-200 text-gray-800 py-2 rounded-md hover:bg-gray-300 transition h-10 flex items-center justify-center"
-            >
-              Quick View
-            </button>
-            <button
-              @click="addToCart(product)"
-              class="flex-1 bg-gray-800 text-white py-2 rounded-md hover:bg-gray-900 transition h-10 flex items-center justify-center"
-            >
-              Add to Cart
-            </button>
-          </div>
-        </div>
+          :product="product"
+          :categories="categories"
+        />
       </div>
 
       <!-- Pagination -->
@@ -173,35 +119,6 @@
         <h3 class="mt-2 text-lg font-medium text-gray-900">No products found</h3>
         <p class="mt-1 text-gray-500">Try adjusting your search or filter to find what you're looking for.</p>
       </div>
-
-      <!-- Quick View Modal -->
-      <div v-if="showQuickView" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-xl p-6 max-w-lg w-full relative">
-          <button @click="closeQuickView" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800">
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <div class="flex flex-col md:flex-row gap-6">
-            <img
-              :src="getProductImage(selectedProduct)"
-              :alt="selectedProduct.name"
-              class="w-full md:w-1/2 h-48 object-cover rounded-lg"
-            />
-            <div class="flex-1">
-              <h3 class="text-2xl font-bold text-gray-800 mb-2">{{ selectedProduct.name }}</h3>
-              <p class="text-sm text-gray-600 mb-4">{{ selectedProduct.description }}</p>
-              <p class="text-lg font-bold text-gray-800 mb-4">{{ formatPrice(selectedProduct.price) }}</p>
-              <button
-                @click="addToCart(selectedProduct); closeQuickView()"
-                class="w-full bg-gray-800 text-white py-2 rounded-md hover:bg-gray-900 transition"
-              >
-                Add to Cart
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -209,9 +126,13 @@
 <script>
 import api from '../services/api';
 import formatPrice from '../utils/formatPrice';
+import ProductCard from '../components/ProductCard.vue';
 
 export default {
   name: 'ShopPage',
+  components: {
+    ProductCard
+  },
   data() {
     return {
       products: [],
@@ -219,8 +140,6 @@ export default {
       loading: true,
       searchQuery: '',
       selectedCategory: '',
-      showQuickView: false,
-      selectedProduct: null,
       currentPage: 1,
       itemsPerPage: 12
     };
@@ -289,33 +208,6 @@ export default {
         console.error('Error fetching categories:', error);
         this.categories = [];
       }
-    },
-    getProductImage(product) {
-      if (!product?.imageUrl) {
-        return 'https://via.placeholder.com/300x300?text=No+Image';
-      }
-      
-      // Ensure the URL is absolute
-      if (!product.imageUrl.startsWith('http')) {
-        return `http://localhost:5285${product.imageUrl}`;
-      }
-      
-      return product.imageUrl;
-    },
-    getCategoryName(categoryId) {
-      const category = this.categories.find(cat => cat.id === categoryId);
-      return category ? category.name : 'Uncategorized';
-    },
-    addToCart(product) {
-      this.$store.dispatch('cart/addToCart', { productId: product.id, quantity: 1 });
-    },
-    openQuickView(product) {
-      this.selectedProduct = product;
-      this.showQuickView = true;
-    },
-    closeQuickView() {
-      this.showQuickView = false;
-      this.selectedProduct = null;
     },
     changePage(page) {
       if (page >= 1 && page <= this.totalPages) {

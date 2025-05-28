@@ -19,6 +19,8 @@ namespace Demo.Data
         public DbSet<Cart> Carts { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
         public DbSet<Review> Reviews { get; set; }
+        public DbSet<Voucher> Vouchers { get; set; }
+        public DbSet<UserVoucher> UserVouchers { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -44,6 +46,10 @@ namespace Demo.Data
                 entity.Property(o => o.TotalAmount)
                     .HasColumnType("decimal(18,2)");
 
+                entity.Property(o => o.DiscountAmount)
+                    .HasColumnType("decimal(18,2)")
+                    .HasDefaultValue(0);
+
                 entity.Property(o => o.ShippingAddress)
                     .HasMaxLength(200)
                     .IsRequired();
@@ -58,6 +64,9 @@ namespace Demo.Data
 
                 entity.Property(o => o.Notes)
                     .HasMaxLength(500);
+
+                entity.Property(o => o.VoucherCode)
+                    .HasMaxLength(50);
             });
 
             // Configure OrderItem
@@ -96,6 +105,51 @@ namespace Demo.Data
                     .WithMany()
                     .HasForeignKey(r => r.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Configure Voucher
+            builder.Entity<Voucher>(entity =>
+            {
+                entity.Property(v => v.Code)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.HasIndex(v => v.Code)
+                    .IsUnique();
+
+                entity.Property(v => v.DiscountValue)
+                    .HasColumnType("decimal(10,2)")
+                    .IsRequired();
+
+                entity.Property(v => v.MaxDiscount)
+                    .HasColumnType("decimal(10,2)");
+
+                entity.Property(v => v.MinOrderValue)
+                    .HasColumnType("decimal(10,2)");
+            });
+
+            // Configure UserVoucher
+            builder.Entity<UserVoucher>(entity =>
+            {
+                entity.HasOne(uv => uv.User)
+                    .WithMany()
+                    .HasForeignKey(uv => uv.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(uv => uv.Voucher)
+                    .WithMany()
+                    .HasForeignKey(uv => uv.VoucherId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(uv => uv.Order)
+                    .WithMany()
+                    .HasForeignKey(uv => uv.OrderId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                // Ensure a user can only use a voucher once
+                entity.HasIndex(uv => new { uv.UserId, uv.VoucherId })
+                    .IsUnique()
+                    .HasFilter("[UsedAt] IS NOT NULL");
             });
         }
     }

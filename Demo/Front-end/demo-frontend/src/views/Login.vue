@@ -238,7 +238,7 @@ export default {
                   errorMessage = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại thông tin đăng nhập.';
                 }
                 break;
-              case 400:
+              case 403:
                 if (serverError?.includes('password')) {
                   errorMessage = 'Mật khẩu không đúng định dạng. Vui lòng kiểm tra lại.';
                 } else if (serverError?.includes('email')) {
@@ -247,7 +247,7 @@ export default {
                   errorMessage = 'Thông tin đăng nhập không hợp lệ';
                 }
                 break;
-              case 403:
+              case 400:
                 errorMessage = 'Tài khoản của bạn không có quyền truy cập. Vui lòng liên hệ quản trị viên.';
                 break;
               case 404:

@@ -3,8 +3,12 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Header -->
       <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">Orders Management</h1>
-        <p class="mt-2 text-sm text-gray-600">Manage and track all customer orders in one place</p>
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">Orders Management</h1>
+            <p class="mt-2 text-sm text-gray-600">Manage and track all customer orders in one place</p>
+          </div>
+        </div>
       </div>
 
       <!-- Error Alert -->
@@ -319,7 +323,7 @@
                       <tfoot>
                         <tr>
                           <td colspan="3" class="px-6 py-4 text-right text-sm font-medium text-gray-900">Total</td>
-                          <td class="px-6 py-4 text-right text-sm font-medium text-gray-900">{{ formatPrice(selectedOrder.totalAmount) }}</td>
+                          <td class="px-6 py-4 text-right text-sm text-gray-900">{{ formatPrice(selectedOrder.totalAmount) }}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -379,6 +383,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useStore } from 'vuex'
 import debounce from 'lodash/debounce'
 import formatPrice from '@/utils/formatPrice';
+import { useGlobalSignalR } from '@/composables/useSignalR'
 
 export default {
   name: 'OrdersManagement',
@@ -393,6 +398,14 @@ export default {
     const showStatusModal = ref(false)
     const newStatus = ref('')
     const orderToUpdate = ref(null)
+
+    // SignalR integration
+    const {
+      connectionStatus,
+      joinAdminDashboard,
+      notifications,
+      addNotification
+    } = useGlobalSignalR()
 
     const filters = ref({
       searchTerm: '',
@@ -523,6 +536,13 @@ export default {
           status: newStatus.value
         })
         
+        // Add admin notification
+        addNotification({
+          title: 'Order Status Updated',
+          message: `Order #${orderToUpdate.value.id} status changed to ${orderStatuses[newStatus.value]}`,
+          type: 'success'
+        })
+        
         // Refresh data
         await fetchOrders()
         await fetchStatistics()
@@ -533,6 +553,13 @@ export default {
         // Show error in UI
         const errorMessage = typeof error === 'string' ? error : 'An error occurred while updating the order status'
         store.commit('orders/SET_ERROR', errorMessage)
+        
+        // Add error notification
+        addNotification({
+          title: 'Update Failed',
+          message: errorMessage,
+          type: 'error'
+        })
       }
     }
 
@@ -550,7 +577,38 @@ export default {
       return orderStatuses[status] || 'Unknown'
     }
 
-    onMounted(() => {
+    const formatTimestamp = (timestamp) => {
+      const date = new Date(timestamp)
+      const now = new Date()
+      const diffInMinutes = Math.floor((now - date) / (1000 * 60))
+      
+      if (diffInMinutes < 1) {
+        return 'Just now'
+      } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m ago`
+      } else if (diffInMinutes < 1440) {
+        const hours = Math.floor(diffInMinutes / 60)
+        return `${hours}h ago`
+      } else {
+        const days = Math.floor(diffInMinutes / 1440)
+        return `${days}d ago`
+      }
+    }
+
+    onMounted(async () => {
+      // Join admin dashboard for SignalR notifications
+      const joinDashboard = async () => {
+        if (connectionStatus.value.isConnected) {
+          await joinAdminDashboard()
+          console.log('✅ Admin joined SignalR dashboard successfully')
+        } else {
+          console.log('⏳ Waiting for SignalR connection...')
+          // Wait for connection and try again
+          setTimeout(joinDashboard, 1000)
+        }
+      }
+      
+      await joinDashboard()
       fetchOrders()
       fetchStatistics()
     })
@@ -570,6 +628,8 @@ export default {
       isLoading,
       hasError,
       error,
+      connectionStatus,
+      notifications,
       getStatusClass,
       fetchOrders,
       fetchStatistics,
@@ -582,6 +642,7 @@ export default {
       updateOrderStatus,
       formatDate,
       formatStatus,
+      formatTimestamp,
       formatPrice
     }
   }

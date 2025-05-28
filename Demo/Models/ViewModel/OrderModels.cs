@@ -13,6 +13,8 @@ namespace Demo.Models.ViewModel
         public string PhoneNumber { get; set; }
         public string FullName { get; set; }
         public string Notes { get; set; }
+        public string? VoucherCode { get; set; }
+        public decimal DiscountAmount { get; set; }
         public List<OrderItemDto> OrderItems { get; set; }
     }
 

@@ -41,6 +41,12 @@ namespace Demo.Models
         [MaxLength(500)]
         public string? Notes { get; set; }
 
+        [MaxLength(50)]
+        public string? VoucherCode { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal DiscountAmount { get; set; } = 0;
+
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
     }
 

@@ -128,6 +128,9 @@
             </div>
           </div>
 
+          <!-- Notification Bell (only show when authenticated) -->
+          <NotificationBell v-if="$store.getters['user/isAuthenticated']" class="notification-bell" />
+
           <!-- User Profile -->
           <div v-if="$store.getters['user/isAuthenticated']" class="relative">
             <button @click="toggleUserMenu" class="flex items-center space-x-2 focus:outline-none">
@@ -206,7 +209,12 @@
 </template>
 
 <script>
+import NotificationBell from './NotificationBell.vue'
+
 export default {
+  components: {
+    NotificationBell
+  },
   data() {
     return {
       menuOpen: false,
